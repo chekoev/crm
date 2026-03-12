@@ -22,42 +22,89 @@
 </head>
 <body>
   <div id="root"></div>
+
+  <!-- Firebase SDK (compat version for simple script usage) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script>
+    // Initialize Firebase
+    firebase.initializeApp({
+      apiKey: "AIzaSyBJTaW-hxMivj4lSSi2ktpXgziWRCdLFTo",
+      authDomain: "mikro15-crm.firebaseapp.com",
+      databaseURL: "https://mikro15-crm-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "mikro15-crm",
+      storageBucket: "mikro15-crm.firebasestorage.app",
+      messagingSenderId: "745551471136",
+      appId: "1:745551471136:web:adc1623536ca89f4d35245"
+    });
+
+    const db = firebase.database();
+
+    // Storage API that syncs with Firebase Realtime Database
+    window.storage = {
+      async get(key) {
+        try {
+          const snap = await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).once("value");
+          const val = snap.val();
+          if (val !== null) return { key: key, value: val };
+          // Fallback: check localStorage for migration
+          const local = localStorage.getItem("m15_" + key);
+          if (local !== null) {
+            // Migrate to Firebase
+            await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).set(local);
+            localStorage.removeItem("m15_" + key);
+            return { key: key, value: local };
+          }
+          return null;
+        } catch(e) {
+          console.error("storage.get error:", e);
+          // Fallback to localStorage
+          const v = localStorage.getItem("m15_" + key);
+          return v !== null ? { key: key, value: v } : null;
+        }
+      },
+      async set(key, value) {
+        try {
+          await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).set(value);
+          localStorage.setItem("m15_" + key, value); // local backup
+          return { key: key, value: value };
+        } catch(e) {
+          console.error("storage.set error:", e);
+          localStorage.setItem("m15_" + key, value);
+          return { key: key, value: value };
+        }
+      },
+      async delete(key) {
+        try {
+          await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).remove();
+          localStorage.removeItem("m15_" + key);
+          return { key: key, deleted: true };
+        } catch(e) {
+          localStorage.removeItem("m15_" + key);
+          return { key: key, deleted: true };
+        }
+      },
+      async list(prefix) {
+        return { keys: [] };
+      },
+      // Listen for real-time changes
+      onValue(key, callback) {
+        db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).on("value", (snap) => {
+          const val = snap.val();
+          if (val !== null) callback(val);
+        });
+      },
+      offValue(key) {
+        db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).off("value");
+      }
+    };
+  </script>
+
+  <!-- React -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-  <script>
-    // Storage API polyfill for standalone deployment (uses localStorage)
-    if (!window.storage) {
-      window.storage = {
-        async get(key) {
-          try {
-            const v = localStorage.getItem("m15_" + key);
-            return v !== null ? { key, value: v } : null;
-          } catch(e) { return null; }
-        },
-        async set(key, value) {
-          try {
-            localStorage.setItem("m15_" + key, value);
-            return { key, value };
-          } catch(e) { return null; }
-        },
-        async delete(key) {
-          try { localStorage.removeItem("m15_" + key); return { key, deleted: true }; }
-          catch(e) { return null; }
-        },
-        async list(prefix) {
-          try {
-            const keys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k.startsWith("m15_" + (prefix||""))) keys.push(k.replace("m15_",""));
-            }
-            return { keys };
-          } catch(e) { return { keys: [] }; }
-        }
-      };
-    }
-  </script>
   <script type="text/babel" src="app.jsx"></script>
   <script type="text/babel">
     const root = ReactDOM.createRoot(document.getElementById('root'));

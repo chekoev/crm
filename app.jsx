@@ -163,25 +163,55 @@ function LoginScreen({ onLogin }) {
 }
 
 function App(){
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState(() => {
+    try { return localStorage.getItem("m15_auth") === "ok"; } catch(e) { return false; }
+  });
 
-  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />;
+  const handleLogin = () => {
+    setAuthed(true);
+    try { localStorage.setItem("m15_auth", "ok"); } catch(e) {}
+  };
 
-  return <MainApp />;
+  const handleLogout = () => {
+    setAuthed(false);
+    try { localStorage.removeItem("m15_auth"); } catch(e) {}
+  };
+
+  if (!authed) return <LoginScreen onLogin={handleLogin} />;
+
+  return <MainApp onLogout={handleLogout} />;
 }
 
-function MainApp(){
+function MainApp({ onLogout }){
   const [data,setData]=useState(init());
   const [loading,setLoading]=useState(true);
   const [view,setView]=useState("dashboard");
-  const [modal,setModal]=useState(null); // {type, ...params}
+  const [modal,setModal]=useState(null);
   const [selMonth,setSelMonth]=useState(new Date().getMonth());
   const [detailDay,setDetailDay]=useState(null);
   const [prodModal,setProdModal]=useState(false);
+  const savingRef = React.useRef(false);
 
   useEffect(()=>{(async()=>{try{const r=await window.storage.get("crm-data");if(r&&r.value){const p=JSON.parse(r.value);setData({...init(),...p,products:p.products||PRODUCTS,rentalProducts:p.rentalProducts||RENTAL_PRODUCTS,stock:p.stock||initStock()})}else{await window.storage.set("crm-data",JSON.stringify(init()))}}catch(e){}setLoading(false)})()},[]);
 
-  const save=useCallback(async nd=>{setData(nd);try{await window.storage.set("crm-data",JSON.stringify(nd))}catch(e){}},[]);
+  useEffect(() => {
+    if (!window.storage.onValue) return;
+    window.storage.onValue("crm-data", (val) => {
+      if (savingRef.current) return;
+      try {
+        const p = JSON.parse(val);
+        setData({ ...init(), ...p, products: p.products || PRODUCTS, rentalProducts: p.rentalProducts || RENTAL_PRODUCTS, stock: p.stock || initStock() });
+      } catch(e) {}
+    });
+    return () => { if (window.storage.offValue) window.storage.offValue("crm-data"); };
+  }, []);
+
+  const save = useCallback(async nd => {
+    setData(nd);
+    savingRef.current = true;
+    try { await window.storage.set("crm-data", JSON.stringify(nd)); } catch(e) {}
+    setTimeout(() => { savingRef.current = false; }, 1000);
+  }, []);
 
   const stats=useMemo(()=>{
     const mo=Array(12).fill(0).map(()=>({s:0,r:0,t:0,sc:0,rc:0}));let yt=0;
@@ -220,7 +250,10 @@ function MainApp(){
           <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#00ff87,#00b85e)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:14,color:"#000"}}>M15</div>
           <span style={{fontWeight:700,fontSize:18,letterSpacing:1}}>mikro_15 CRM</span>
         </div>
-        <button onClick={()=>setProdModal(true)} style={{background:"transparent",border:"1px solid #333",borderRadius:8,color:"#888",padding:"6px 12px",fontSize:12,cursor:"pointer"}}>⚙ Товары</button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setProdModal(true)} style={{background:"transparent",border:"1px solid #333",borderRadius:8,color:"#888",padding:"6px 12px",fontSize:12,cursor:"pointer"}}>⚙ Товары</button>
+          <button onClick={onLogout} style={{background:"transparent",border:"1px solid #ff444444",borderRadius:8,color:"#ff4444",padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Выйти</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:0,borderBottom:"1px solid #222",background:"#0d0d15",overflowX:"auto"}}>
         {[{id:"dashboard",l:"📊 Дашборд"},{id:"calendar",l:"📅 Календарь"},{id:"sales",l:"💰 Продажи"},{id:"rentals",l:"📦 Аренда"},{id:"stock",l:"🏪 Склад"},{id:"clients",l:"👥 Клиенты"}].map(t=>(
