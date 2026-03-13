@@ -672,7 +672,10 @@ function SalesList({data,save,onEdit}){
 function RentalsList({data,save,onEdit}){
   const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};
   const stL={booking:"Ожидает",active:"Активная",done:"Завершена"};
+  const nextSt={booking:"active",active:"done"};
+  const nextStL={booking:"Активная",active:"Завершена"};
   const [confirmIdx,setConfirmIdx]=useState(null);
+  const [statusChange,setStatusChange]=useState(null); // {idx, newStatus, label}
   const [tab,setTab]=useState("all");
   const [search,setSearch]=useState("");
 
@@ -684,8 +687,9 @@ function RentalsList({data,save,onEdit}){
       list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking").reverse();
     }
     if (!search) return list;
-    const q = search.toLowerCase();
-    return list.filter(r => (r.phone || "").includes(q) || (r.lastName || "").toLowerCase().includes(q));
+    const q = formatPhone(search);
+    const ql = search.toLowerCase();
+    return list.filter(r => (r.phone || "").includes(q) || (r.phone || "").includes(search) || (r.lastName || "").toLowerCase().includes(ql));
   }, [data.rentals, tab, search]);
 
   return (<div>
@@ -695,10 +699,12 @@ function RentalsList({data,save,onEdit}){
         <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:8,background:"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00ff87":"2px solid transparent",color:tab===t.id?"#00ff87":"#666",fontSize:13,cursor:"pointer"}}>{t.l}</button>
       ))}
     </div>
-    <input type="text" placeholder="Поиск по телефону или фамилии..." value={search} onChange={e => setSearch(e.target.value)} style={{...inp, marginBottom: 12}} />
+    <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту запись?" onConfirm={()=>{save({...data,rentals:data.rentals.filter((_,j)=>j!==confirmIdx)});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
-    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
+    {statusChange!==null&&<ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={()=>{const nr=[...data.rentals];nr[statusChange.idx]={...nr[statusChange.idx],status:statusChange.newStatus};save({...data,rentals:nr});setStatusChange(null)}} onClose={()=>setStatusChange(null)}/>}
+    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search&&search!=="+7"?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
     filtered.map((r,i)=>{
+      const ns = nextSt[r.status];
       return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${stC[r.status]||"#555"}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(r._idx)}>
           <div>
@@ -711,8 +717,7 @@ function RentalsList({data,save,onEdit}){
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8}}>
-          {r.status==="booking"&&<button onClick={e=>{e.stopPropagation();const a=prompt("Сумма аренды:");if(a){const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date())};save({...data,rentals:nr})}}} style={{background:"#00aaff22",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Аренда</button>}
-          {r.status==="active"&&<button onClick={e=>{e.stopPropagation();const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"done"};save({...data,rentals:nr})}} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Завершить</button>}
+          {ns&&<button onClick={e=>{e.stopPropagation();if(ns==="active"&&r.status==="booking"){const a=prompt("Сумма аренды:");if(!a)return;const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date())};save({...data,rentals:nr})}else{setStatusChange({idx:r._idx,newStatus:ns,label:nextStL[r.status]})}}} style={{background:stC[ns]+"22",border:`1px solid ${stC[ns]}44`,borderRadius:6,color:stC[ns],padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextStL[r.status]}</button>}
           <button onClick={e=>{e.stopPropagation();onEdit(r._idx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
           <button onClick={e=>{e.stopPropagation();setConfirmIdx(r._idx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
@@ -892,12 +897,14 @@ function AppBookingsView({data, save, openModal}) {
   const [confirmIdx, setConfirmIdx] = useState(null);
   const [editIdx, setEditIdx] = useState(null);
   const [search, setSearch] = useState("");
+  const [statusChange, setStatusChange] = useState(null); // {idx, newStatus, label}
 
   const filtered = useMemo(() => {
     const list = bookings.map((b, i) => ({...b, _idx: i}));
-    if (!search) return list.reverse();
-    const q = search.toLowerCase();
-    return list.filter(b => (b.phone || "").includes(q) || (b.name || "").toLowerCase().includes(q)).reverse();
+    if (!search || search === "+7") return list.reverse();
+    const q = formatPhone(search);
+    const ql = search.toLowerCase();
+    return list.filter(b => (b.phone || "").includes(q) || (b.phone || "").includes(search) || (b.name || "").toLowerCase().includes(ql)).reverse();
   }, [bookings, search]);
 
   if (editIdx !== null) {
@@ -910,11 +917,15 @@ function AppBookingsView({data, save, openModal}) {
       <h3 style={{margin:0,fontSize:16,fontWeight:600}}>Брони приложений</h3>
       <button onClick={() => openModal("appBooking")} style={{background:"#ff6bff18",border:"1px solid #ff6bff40",borderRadius:8,color:"#ff6bff",padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>+ Новая</button>
     </div>
-    <input type="text" placeholder="Поиск по телефону или имени..." value={search} onChange={e => setSearch(e.target.value)} style={{...inp, marginBottom: 12}} />
+    <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx !== null && <ConfirmModal msg="Удалить бронь приложения?" onConfirm={() => { const nb = [...bookings]; nb.splice(confirmIdx, 1); save({...data, appBookings: nb}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
-    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search ? "Ничего не найдено" : "Пока нет броней приложений"}</div> :
+    {statusChange !== null && <ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={() => { const nb = [...bookings]; nb[statusChange.idx] = {...nb[statusChange.idx], status: statusChange.newStatus}; save({...data, appBookings: nb}); setStatusChange(null); }} onClose={() => setStatusChange(null)} />}
+    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search && search !== "+7" ? "Ничего не найдено" : "Пока нет броней приложений"}</div> :
     filtered.map((b, i) => {
       const isInstalled = b.status === "installed" || b.status === "done";
+      const nextStatus = isInstalled ? "pending" : "installed";
+      const nextLabel = isInstalled ? "Ожидает" : "Установлена";
+      const nextColor = isInstalled ? "#ff6bff" : "#00ff87";
       return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${isInstalled ? "#00ff87" : "#ff6bff"}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={() => setEditIdx(b._idx)}>
           <div>
@@ -927,7 +938,7 @@ function AppBookingsView({data, save, openModal}) {
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8}}>
-          {!isInstalled && <button onClick={e => { e.stopPropagation(); const nb = [...bookings]; nb[b._idx] = {...nb[b._idx], status: "installed"}; save({...data, appBookings: nb}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Установлена</button>}
+          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: b._idx, newStatus: nextStatus, label: nextLabel}); }} style={{background:nextColor+"22",border:`1px solid ${nextColor}44`,borderRadius:6,color:nextColor,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLabel}</button>
           <button onClick={e => { e.stopPropagation(); setEditIdx(b._idx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
           <button onClick={e => { e.stopPropagation(); setConfirmIdx(b._idx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
