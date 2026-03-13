@@ -236,7 +236,8 @@ function MainApp({ onLogout }){
   const dayData=useMemo(()=>{
     if(!detailDay)return null;
     const ds=data.sales.filter(s=>s.date===detailDay),dr=data.rentals.filter(r=>r.date===detailDay);
-    return {sales:ds,rentals:dr,totalSales:ds.reduce((a,s)=>a+s.amount,0),totalRentals:dr.filter(r=>r.status!=="booking").reduce((a,r)=>a+(r.amount||0),0)};
+    const da=(data.appointments||[]).filter(a=>a.date===detailDay);
+    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>a+s.amount,0),totalRentals:dr.filter(r=>r.status!=="booking").reduce((a,r)=>a+(r.amount||0),0)};
   },[data,detailDay]);
 
   const clients=useMemo(()=>{
@@ -760,7 +761,13 @@ function ClientsView({clients,data,save}){
 // ====== CALENDAR ======
 function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
   const year=2026,days=dim(year,selMonth);const fd=new Date(year,selMonth,1).getDay();const offset=fd===0?6:fd-1;const today=fmtD(new Date());
-  const dt=useMemo(()=>{const m={};data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0};m[s.date].s+=s.amount});data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0};if(r.status==="booking")m[r.date].b++;else m[r.date].r+=(r.amount||0)});return m},[data]);
+  const dt=useMemo(()=>{
+    const m={};
+    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};m[s.date].s+=s.amount});
+    data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;else m[r.date].r+=(r.amount||0)});
+    (data.appointments||[]).forEach(ap=>{if(!m[ap.date])m[ap.date]={s:0,r:0,b:0,a:0};m[ap.date].a++});
+    return m;
+  },[data]);
   return (<div>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
       <button onClick={()=>setSelMonth(Math.max(0,selMonth-1))} style={navBtn}>‹</button>
@@ -770,11 +777,14 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>{["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map(d=><div key={d} style={{textAlign:"center",fontSize:11,color:"#555",padding:4}}>{d}</div>)}</div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
       {Array(offset).fill(null).map((_,i)=><div key={`e${i}`}/>)}
-      {Array.from({length:days},(_,i)=>{const d=`${year}-${pad(selMonth+1)}-${pad(i+1)}`;const info=dt[d];const isT=d===today;const tot=info?info.s+info.r:0;
-        return (<button key={i} onClick={()=>onDayClick(d)} style={{background:isT?"#00ff8718":info?"#1a1a2a":"#0d0d15",border:isT?"1px solid #00ff8740":"1px solid #1a1a2a",borderRadius:8,padding:"6px 2px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:50}}>
+      {Array.from({length:days},(_,i)=>{const d=`${year}-${pad(selMonth+1)}-${pad(i+1)}`;const info=dt[d];const isT=d===today;const tot=info?info.s+info.r:0;const hasData=info&&(info.s||info.r||info.b||info.a);
+        return (<button key={i} onClick={()=>onDayClick(d)} style={{background:isT?"#00ff8718":hasData?"#1a1a2a":"#0d0d15",border:isT?"1px solid #00ff8740":"1px solid #1a1a2a",borderRadius:8,padding:"6px 2px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:50}}>
           <span style={{fontSize:13,color:isT?"#00ff87":"#ccc",fontWeight:isT?700:400}}>{i+1}</span>
           {tot>0&&<span style={{fontSize:8,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{(tot/1000).toFixed(0)}к</span>}
-          {info?.b>0&&<span style={{fontSize:8,color:"#ffaa00"}}>🔖{info.b}</span>}
+          <div style={{display:"flex",gap:2}}>
+            {info?.b>0&&<span style={{fontSize:7,color:"#ffaa00"}}>🔖</span>}
+            {info?.a>0&&<span style={{fontSize:7,color:"#66ccff"}}>📋{info.a}</span>}
+          </div>
         </button>)})}
     </div>
   </div>);
@@ -798,7 +808,8 @@ function DayDetail({day,dayData,onClose,onAddSale,onAddRental,onAddAppointment})
       </div>
       {dayData.sales.length>0&&<><h4 style={{fontSize:13,color:"#888",margin:"12px 0 8px"}}>Продажи ({dayData.sales.length})</h4>{dayData.sales.map((s,i)=>{const nm=s.items?s.items.map(it=>it.name).join(", "):(s.productName||"Продажа");return (<div key={i} style={{background:"#0d0d15",borderRadius:8,padding:"8px 12px",marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13}}>{nm}</span><span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(s.amount)}</span></div>{s.name&&<div style={{fontSize:11,color:"#666",marginTop:2}}>{s.name} {s.phone||""}</div>}{s.items&&s.items.length>1&&s.items.map((it,j)=><div key={j} style={{fontSize:11,color:"#555",display:"flex",justifyContent:"space-between",paddingLeft:8}}><span>· {it.name}</span><span>{fmtM(it.price)}</span></div>)}</div>)})}</>}
       {dayData.rentals.length>0&&<><h4 style={{fontSize:13,color:"#888",margin:"12px 0 8px"}}>Аренда / Бронь ({dayData.rentals.length})</h4>{dayData.rentals.map((r,i)=>(<div key={i} style={{background:"#0d0d15",borderRadius:8,padding:"8px 12px",marginBottom:6,borderLeft:`3px solid ${stC[r.status]}`}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13}}>{r.lastName} · {r.phone}</span><span style={{fontSize:11,color:stC[r.status]}}>{stL[r.status]}</span></div>{r.note&&<div style={{fontSize:11,color:"#666",marginTop:2}}>{r.note}</div>}</div>))}</>}
-      {!dayData.sales.length&&!dayData.rentals.length&&<div style={{color:"#555",textAlign:"center",padding:20}}>Нет записей</div>}
+      {dayData.appointments&&dayData.appointments.length>0&&<><h4 style={{fontSize:13,color:"#888",margin:"12px 0 8px"}}>📋 Записи ({dayData.appointments.length})</h4>{dayData.appointments.map((a,i)=>{const apStC={pending:"#66ccff",done:"#00ff87",cancelled:"#ff4444"};const apStL={pending:"Ожидает",done:"Пришёл",cancelled:"Отменена"};const st=a.status||"pending";return (<div key={i} style={{background:"#0d0d15",borderRadius:8,padding:"8px 12px",marginBottom:6,borderLeft:`3px solid ${apStC[st]}`}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13}}>{a.name||"—"} · {a.phone||"—"}</span><span style={{fontSize:11,color:apStC[st]}}>{apStL[st]}</span></div><div style={{fontSize:11,color:"#666",marginTop:2}}>{a.time||"—"} · {a.purpose==="purchase"?"Покупка":a.purpose==="consultation"?"Консультация":a.purpose||"—"}{a.note?` · ${a.note}`:""}</div></div>)})}</>}
+      {!dayData.sales.length&&!dayData.rentals.length&&(!dayData.appointments||!dayData.appointments.length)&&<div style={{color:"#555",textAlign:"center",padding:20}}>Нет записей</div>}
     </div></div>);
 }
 
