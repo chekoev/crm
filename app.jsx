@@ -20,6 +20,7 @@ const RENTAL_PRODUCTS = [
 ];
 
 const YEAR_PLAN = 7000000;
+const PREV_YEARS = { 2025: 5776400, 2024: 4630750, 2023: 3730250 };
 const MR = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const pad = n => String(n).padStart(2,"0");
@@ -82,7 +83,7 @@ function restoreStockFromSale(data, saleIdx) {
   newStock.sale = ss;
   return newStock;
 }
-const init = () => ({ sales: SEED, rentals: [], products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
+const init = () => ({ sales: SEED, rentals: [], appBookings: [], products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
 
 function checkCreds(u, p) {
   return u === "chiko" && p === "Alanchiko!!";
@@ -256,16 +257,17 @@ function MainApp({ onLogout }){
         </div>
       </div>
       <div style={{display:"flex",gap:0,borderBottom:"1px solid #222",background:"#0d0d15",overflowX:"auto"}}>
-        {[{id:"dashboard",l:"📊 Дашборд"},{id:"calendar",l:"📅 Календарь"},{id:"sales",l:"💰 Продажи"},{id:"rentals",l:"📦 Аренда"},{id:"stock",l:"🏪 Склад"},{id:"clients",l:"👥 Клиенты"}].map(t=>(
+        {[{id:"dashboard",l:"📊 Дашборд"},{id:"calendar",l:"📅 Календарь"},{id:"sales",l:"💰 Продажи"},{id:"rentals",l:"📦 Аренда"},{id:"apps",l:"📱 Прилож."},{id:"stock",l:"🏪 Склад"},{id:"clients",l:"👥 Клиенты"}].map(t=>(
           <button key={t.id} onClick={()=>setView(t.id)} style={{flex:"0 0 auto",padding:"12px 10px",background:"transparent",border:"none",borderBottom:view===t.id?"2px solid #00ff87":"2px solid transparent",color:view===t.id?"#00ff87":"#666",fontSize:12,fontWeight:view===t.id?700:400,cursor:"pointer",whiteSpace:"nowrap"}}>{t.l}</button>
         ))}
       </div>
       <div style={{padding:"16px 16px 0"}}>
-        {view==="dashboard"&&<Dashboard stats={stats} data={data} maxMo={maxMo}/>}
-        {view==="calendar"&&<CalendarView data={data} selMonth={selMonth} setSelMonth={setSelMonth} onDayClick={setDetailDay}/>}
-        {detailDay&&<DayDetail day={detailDay} dayData={dayData} onClose={()=>setDetailDay(null)}/>}
+        {view==="dashboard"&&<Dashboard stats={stats} data={data} maxMo={maxMo} />}
+        {view==="calendar"&&<CalendarView data={data} selMonth={selMonth} setSelMonth={setSelMonth} onDayClick={setDetailDay} onBook={(day)=>{setModal({type:"bookingDate",date:day})}} />}
+        {detailDay&&<DayDetail day={detailDay} dayData={dayData} onClose={()=>setDetailDay(null)} onAddSale={()=>{setDetailDay(null);openModal("sale")}} onAddRental={()=>{setDetailDay(null);openModal("booking")}} />}
         {view==="sales"&&<SalesList data={data} save={save} onEdit={(idx)=>openModal("editSale",{idx})}/>}
         {view==="rentals"&&<RentalsList data={data} save={save} onEdit={(idx)=>openModal("editRental",{idx})}/>}
+        {view==="apps"&&<AppBookingsView data={data} save={save} openModal={openModal} />}
         {view==="clients"&&<ClientsView clients={clients} data={data} save={save}/>}
         {view==="stock"&&<StockView data={data} save={save}/>}
       </div>
@@ -273,10 +275,11 @@ function MainApp({ onLogout }){
       <button onClick={()=>openModal("choose")} style={{position:"fixed",bottom:24,right:24,width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ff87,#00cc6a)",border:"none",color:"#000",fontSize:28,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 20px rgba(0,255,135,0.3)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>+</button>
 
       {/* MODALS */}
-      {modal?.type==="choose"&&<Modal onClose={closeModal} title="Новая запись"><div style={{display:"flex",gap:12}}>
-        <button onClick={()=>openModal("sale")} style={{flex:1,padding:"20px 16px",background:"#00ff8715",border:"1px solid #00ff8740",borderRadius:12,color:"#00ff87",fontSize:15,fontWeight:600,cursor:"pointer"}}>💰 Продажа</button>
-        <button onClick={()=>openModal("rental")} style={{flex:1,padding:"20px 16px",background:"#00aaff15",border:"1px solid #00aaff40",borderRadius:12,color:"#00aaff",fontSize:15,fontWeight:600,cursor:"pointer"}}>📦 Аренда</button>
-        <button onClick={()=>openModal("booking")} style={{flex:1,padding:"20px 16px",background:"#ffaa0015",border:"1px solid #ffaa0040",borderRadius:12,color:"#ffaa00",fontSize:15,fontWeight:600,cursor:"pointer"}}>🔖 Бронь</button>
+      {modal?.type==="choose"&&<Modal onClose={closeModal} title="Новая запись"><div style={{display:"flex",flexWrap:"wrap",gap:12}}>
+        <button onClick={()=>openModal("sale")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#00ff8715",border:"1px solid #00ff8740",borderRadius:12,color:"#00ff87",fontSize:14,fontWeight:600,cursor:"pointer"}}>💰 Продажа</button>
+        <button onClick={()=>openModal("rental")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#00aaff15",border:"1px solid #00aaff40",borderRadius:12,color:"#00aaff",fontSize:14,fontWeight:600,cursor:"pointer"}}>📦 Аренда</button>
+        <button onClick={()=>openModal("booking")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#ffaa0015",border:"1px solid #ffaa0040",borderRadius:12,color:"#ffaa00",fontSize:14,fontWeight:600,cursor:"pointer"}}>🔖 Бронь аренды</button>
+        <button onClick={()=>openModal("appBooking")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#ff6bff15",border:"1px solid #ff6bff40",borderRadius:12,color:"#ff6bff",fontSize:14,fontWeight:600,cursor:"pointer"}}>📱 Бронь прилож.</button>
       </div></Modal>}
 
       {modal?.type==="sale"&&<SaleForm products={data.products} stock={data.stock?.sale||{}} selDate={selDate} onClose={closeModal} onSave={s=>{
@@ -294,6 +297,8 @@ function MainApp({ onLogout }){
       {modal?.type==="editRental"&&<EditRentalModal idx={modal.idx} data={data} save={save} rp={data.rentalProducts} onClose={closeModal}/>}
       {modal?.type==="confirm"&&<ConfirmModal msg={modal.msg} onConfirm={()=>{modal.onConfirm();closeModal()}} onClose={closeModal}/>}
       {modal?.type==="editClient"&&<EditClientModal client={modal.client} data={data} save={save} onClose={closeModal}/>}
+      {modal?.type==="appBooking"&&<AppBookingForm onClose={closeModal} onSave={b => { save({...data, appBookings: [...(data.appBookings||[]), b]}); closeModal(); }} />}
+      {modal?.type==="bookingDate"&&<RentalForm kind="booking" selDate={modal.date} rp={data.rentalProducts} onClose={closeModal} onSave={r => { save({...data, rentals:[...data.rentals, r]}); closeModal(); }} />}
 
       {prodModal&&<ProductManager products={data.products} rp={data.rentalProducts} onClose={()=>setProdModal(false)} onSave={(p,rp)=>{save({...data,products:p,rentalProducts:rp});setProdModal(false)}}/>}
     </div>
@@ -323,6 +328,27 @@ function ConfirmModal({msg,onConfirm,onClose}){
 
 // ====== DASHBOARD ======
 function Dashboard({stats,data,maxMo}){
+  // Category breakdown
+  const cats = useMemo(() => {
+    let earphones = 0, rentals = 0, apps = 0, buttons = 0;
+    const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
+    const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
+    data.sales.forEach(s => {
+      if (new Date(s.date).getFullYear() !== 2026) return;
+      if (s.items) s.items.forEach(it => {
+        if (it.id === "iphone_app") apps += it.price;
+        else if (btnIds.has(it.id)) buttons += it.price;
+        else earphones += it.price;
+      }); else earphones += s.amount;
+    });
+    data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
+    // App bookings that are completed
+    (data.appBookings || []).filter(b => b.status === "done" && new Date(b.date).getFullYear() === 2026).forEach(b => { apps += (b.amount || 0); });
+    const total = earphones + rentals + apps + buttons;
+    const pct = v => total > 0 ? ((v / total) * 100).toFixed(1) : "0.0";
+    return { earphones, rentals, apps, buttons, total, pct };
+  }, [data]);
+
   return (<div>
     <div style={{background:"#111118",borderRadius:16,padding:20,border:"1px solid #1a1a2a",marginBottom:16}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,color:"#888"}}>Годовой план 2026</span><span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{stats.progress.toFixed(1)}%</span></div>
@@ -330,6 +356,7 @@ function Dashboard({stats,data,maxMo}){
       <div style={{height:8,background:"#1a1a2a",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",borderRadius:4,width:`${Math.min(stats.progress,100)}%`,background:stats.progress<30?"linear-gradient(90deg,#ff4444,#ff6b6b)":stats.progress<70?"linear-gradient(90deg,#ffaa00,#ffcc00)":"linear-gradient(90deg,#00ff87,#00cc6a)",transition:"width 0.5s"}}/></div>
       <div style={{marginTop:10,fontSize:13,color:"#888"}}>Осталось: <span style={{color:"#ff6b6b",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(Math.max(0,stats.remaining))}</span></div>
     </div>
+
     <div style={{background:"#111118",borderRadius:16,padding:20,border:"1px solid #1a1a2a",marginBottom:16}}>
       <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:600}}>Доход по месяцам</h3>
       <div style={{display:"flex",alignItems:"flex-end",gap:4,height:140}}>
@@ -341,6 +368,50 @@ function Dashboard({stats,data,maxMo}){
           </div>)})}
       </div>
     </div>
+
+    {/* Category breakdown */}
+    <div style={{background:"#111118",borderRadius:16,padding:20,border:"1px solid #1a1a2a",marginBottom:16}}>
+      <h3 style={{margin:"0 0 14px",fontSize:15,fontWeight:600}}>Структура дохода</h3>
+      {[
+        {l:"Наушники (продажа)",v:cats.earphones,c:"#00ff87"},
+        {l:"Аренда",v:cats.rentals,c:"#00aaff"},
+        {l:"Приложения",v:cats.apps,c:"#ff6bff"},
+        {l:"Кнопки",v:cats.buttons,c:"#ffaa00"},
+      ].map((c,i) => (
+        <div key={i} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+            <span style={{color:"#aaa"}}>{c.l}</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",color:c.c}}>{cats.pct(c.v)}% · {fmtM(c.v)}</span>
+          </div>
+          <div style={{height:6,background:"#1a1a2a",borderRadius:3,overflow:"hidden"}}>
+            <div style={{height:"100%",borderRadius:3,width:`${cats.total>0?(c.v/cats.total)*100:0}%`,background:c.c,transition:"width 0.5s"}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Year over Year */}
+    <div style={{background:"#111118",borderRadius:16,padding:20,border:"1px solid #1a1a2a",marginBottom:16}}>
+      <h3 style={{margin:"0 0 14px",fontSize:15,fontWeight:600}}>Сравнение с прошлыми годами</h3>
+      {Object.entries(PREV_YEARS).sort((a,b)=>Number(b[0])-Number(a[0])).map(([yr,total])=>{
+        const diff = stats.yearTotal - total;
+        const pct = total > 0 ? ((stats.yearTotal / total) * 100).toFixed(0) : "—";
+        const ahead = diff >= 0;
+        return (
+          <div key={yr} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a2a"}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:600}}>{yr} год</div>
+              <div style={{fontSize:12,color:"#666"}}>{fmtM(total)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:14,fontWeight:700,color:ahead?"#00ff87":"#ff6b6b",fontFamily:"'JetBrains Mono',monospace"}}>{pct}%</div>
+              <div style={{fontSize:11,color:ahead?"#00ff87":"#ff6b6b"}}>{ahead?"+":"−"}{fmtM(Math.abs(diff))}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
       {[{l:"Продаж",v:data.sales.length,c:"#00ff87"},{l:"Аренд",v:data.rentals.filter(r=>r.status!=="booking").length,c:"#00aaff"},{l:"Бронь",v:data.rentals.filter(r=>r.status==="booking").length,c:"#ffaa00"},{l:"Этот месяц",v:fmtM(stats.monthly[new Date().getMonth()]?.t||0),c:"#ff6bff"}].map((c,i)=>(
         <div key={i} style={{background:"#111118",borderRadius:12,padding:"14px 16px",border:"1px solid #1a1a2a"}}><div style={{fontSize:12,color:"#666",marginBottom:4}}>{c.l}</div><div style={{fontSize:20,fontWeight:700,color:c.c,fontFamily:"'JetBrains Mono',monospace"}}>{c.v}</div></div>
@@ -505,32 +576,54 @@ function RentalForm({kind,selDate,rp,onClose,onSave}){
   </div></Modal>);
 }
 
-// ====== SALES LIST ======
+// ====== SALES LIST (grouped by date) ======
 function SalesList({data,save,onEdit}){
   const [confirmIdx,setConfirmIdx]=useState(null);
+
+  const grouped = useMemo(() => {
+    const map = {};
+    data.sales.forEach((s, idx) => {
+      if (!map[s.date]) map[s.date] = [];
+      map[s.date].push({ ...s, _idx: idx });
+    });
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [data.sales]);
+
   return (<div>
     <h3 style={{margin:"0 0 12px",fontSize:16,fontWeight:600}}>Продажи</h3>
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту продажу?" onConfirm={()=>{const ns=restoreStockFromSale(data,confirmIdx);save({...data,sales:data.sales.filter((_,j)=>j!==confirmIdx),stock:ns});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
-    {!data.sales.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет продаж</div>:
-    [...data.sales].reverse().map((s,i)=>{
-      const realIdx=data.sales.length-1-i;
-      const label=s.items?s.items.map(it=>it.name).join(", "):(s.productName||"Продажа");
-      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>onEdit(realIdx)}>
-            <div style={{fontSize:14,fontWeight:600}}>{label}</div>
-            <div style={{fontSize:12,color:"#666",marginTop:2}}>{s.date} · {s.name||""} {s.phone||"—"}</div>
-            {s.items&&s.items.length>1&&<div style={{marginTop:6}}>{s.items.map((it,j)=>(<div key={j} style={{fontSize:11,color:"#888",display:"flex",justifyContent:"space-between",padding:"1px 0"}}><span>{it.name}</span><span style={{color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(it.price)}</span></div>))}</div>}
+    {!data.sales.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет продаж</div> :
+    grouped.map(([date, sales]) => {
+      const d = new Date(date);
+      const dayTotal = sales.reduce((a, s) => a + s.amount, 0);
+      const dayLabel = `${d.getDate()} ${MR[d.getMonth()]}`;
+      return (
+        <div key={date} style={{marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8,padding:"0 4px"}}>
+            <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{dayLabel}</span>
+            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayTotal)}</span>
           </div>
-          <div style={{textAlign:"right",marginLeft:12,flexShrink:0}}>
-            <div style={{fontSize:15,fontWeight:700,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(s.amount)}</div>
-            <div style={{display:"flex",gap:8,marginTop:4,justifyContent:"flex-end"}}>
-              <button onClick={()=>onEdit(realIdx)} style={{background:"none",border:"none",color:"#00aaff",fontSize:11,cursor:"pointer"}}>✏️</button>
-              <button onClick={()=>setConfirmIdx(realIdx)} style={{background:"none",border:"none",color:"#ff4444",fontSize:11,cursor:"pointer"}}>🗑</button>
-            </div>
-          </div>
+          {sales.map((s, i) => {
+            const label = s.items ? s.items.map(it => it.name).join(", ") : (s.productName || "Продажа");
+            return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>onEdit(s._idx)}>
+                  <div style={{fontSize:14,fontWeight:600}}>{label}</div>
+                  <div style={{fontSize:12,color:"#666",marginTop:2}}>{s.name||""} {s.phone||"—"}</div>
+                  {s.items&&s.items.length>1&&<div style={{marginTop:4}}>{s.items.map((it,j)=>(<div key={j} style={{fontSize:11,color:"#888",display:"flex",justifyContent:"space-between",padding:"1px 0"}}><span>{it.name}</span><span style={{color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(it.price)}</span></div>))}</div>}
+                </div>
+                <div style={{textAlign:"right",marginLeft:12,flexShrink:0}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(s.amount)}</div>
+                  <div style={{display:"flex",gap:8,marginTop:4,justifyContent:"flex-end"}}>
+                    <button onClick={()=>onEdit(s._idx)} style={{background:"none",border:"none",color:"#00aaff",fontSize:11,cursor:"pointer"}}>✏️</button>
+                    <button onClick={()=>setConfirmIdx(s._idx)} style={{background:"none",border:"none",color:"#ff4444",fontSize:11,cursor:"pointer"}}>🗑</button>
+                  </div>
+                </div>
+              </div>
+            </div>);
+          })}
         </div>
-      </div>);
+      );
     })}
   </div>);
 }
@@ -540,14 +633,25 @@ function RentalsList({data,save,onEdit}){
   const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};
   const stL={booking:"Бронь",active:"Аренда",done:"Завершена"};
   const [confirmIdx,setConfirmIdx]=useState(null);
+  const [tab,setTab]=useState("all");
+
+  const filtered = useMemo(() => {
+    if (tab === "bookings") return data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status==="booking").sort((a,b)=>a.date.localeCompare(b.date));
+    return data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking").reverse();
+  }, [data.rentals, tab]);
+
   return (<div>
-    <h3 style={{margin:"0 0 12px",fontSize:16,fontWeight:600}}>Аренда и брони</h3>
+    <h3 style={{margin:"0 0 8px",fontSize:16,fontWeight:600}}>Аренда и брони</h3>
+    <div style={{display:"flex",marginBottom:14}}>
+      {[{id:"all",l:"Аренды"},{id:"bookings",l:"Будущие брони"}].map(t=>(
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:8,background:"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00ff87":"2px solid transparent",color:tab===t.id?"#00ff87":"#666",fontSize:13,cursor:"pointer"}}>{t.l}</button>
+      ))}
+    </div>
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту запись?" onConfirm={()=>{save({...data,rentals:data.rentals.filter((_,j)=>j!==confirmIdx)});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
-    {!data.rentals.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет аренд</div>:
-    [...data.rentals].reverse().map((r,i)=>{
-      const realIdx=data.rentals.length-1-i;
+    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
+    filtered.map((r,i)=>{
       return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${stC[r.status]||"#555"}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(realIdx)}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(r._idx)}>
           <div>
             <div style={{fontSize:14,fontWeight:600}}>{r.productName?`${r.productName} · `:""}{r.lastName||"—"} · {r.phone||"—"}</div>
             <div style={{fontSize:12,color:"#666",marginTop:2}}>{r.date}{r.note?` · ${r.note}`:""}</div>
@@ -558,10 +662,10 @@ function RentalsList({data,save,onEdit}){
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8}}>
-          {r.status==="booking"&&<button onClick={e=>{e.stopPropagation();const a=prompt("Сумма аренды:");if(a){const nr=[...data.rentals];nr[realIdx]={...nr[realIdx],status:"active",amount:Number(a),date:fmtD(new Date())};save({...data,rentals:nr})}}} style={{background:"#00aaff22",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Аренда</button>}
-          {r.status==="active"&&<button onClick={e=>{e.stopPropagation();const nr=[...data.rentals];nr[realIdx]={...nr[realIdx],status:"done"};save({...data,rentals:nr})}} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Завершить</button>}
-          <button onClick={e=>{e.stopPropagation();onEdit(realIdx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️ Изменить</button>
-          <button onClick={e=>{e.stopPropagation();setConfirmIdx(realIdx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
+          {r.status==="booking"&&<button onClick={e=>{e.stopPropagation();const a=prompt("Сумма аренды:");if(a){const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date())};save({...data,rentals:nr})}}} style={{background:"#00aaff22",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Аренда</button>}
+          {r.status==="active"&&<button onClick={e=>{e.stopPropagation();const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"done"};save({...data,rentals:nr})}} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Завершить</button>}
+          <button onClick={e=>{e.stopPropagation();onEdit(r._idx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
+          <button onClick={e=>{e.stopPropagation();setConfirmIdx(r._idx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
       </div>);
     })}
@@ -596,7 +700,7 @@ function ClientsView({clients,data,save}){
 }
 
 // ====== CALENDAR ======
-function CalendarView({data,selMonth,setSelMonth,onDayClick}){
+function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
   const year=2026,days=dim(year,selMonth);const fd=new Date(year,selMonth,1).getDay();const offset=fd===0?6:fd-1;const today=fmtD(new Date());
   const dt=useMemo(()=>{const m={};data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0};m[s.date].s+=s.amount});data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0};if(r.status==="booking")m[r.date].b++;else m[r.date].r+=(r.amount||0)});return m},[data]);
   return (<div>
@@ -619,12 +723,16 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick}){
 }
 
 // ====== DAY DETAIL ======
-function DayDetail({day,dayData,onClose}){
+function DayDetail({day,dayData,onClose,onAddSale,onAddRental}){
   if(!dayData)return null;const d=new Date(day);const label=`${d.getDate()} ${MR[d.getMonth()]}`;
   const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};const stL={booking:"Бронь",active:"Аренда",done:"Завершена"};
   return (<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#111118",borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto",border:"1px solid #222"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,fontSize:17,fontWeight:700}}>{label}</h3><button onClick={onClose} style={{background:"#222",border:"none",color:"#888",width:32,height:32,borderRadius:"50%",fontSize:16,cursor:"pointer"}}>✕</button></div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <button onClick={onAddSale} style={{flex:1,padding:"10px",background:"#00ff8712",border:"1px solid #00ff8730",borderRadius:10,color:"#00ff87",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ Продажа</button>
+        <button onClick={onAddRental} style={{flex:1,padding:"10px",background:"#ffaa0012",border:"1px solid #ffaa0030",borderRadius:10,color:"#ffaa00",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ Бронь аренды</button>
+      </div>
       <div style={{display:"flex",gap:12,marginBottom:16}}>
         <div style={{flex:1,background:"#00ff8712",borderRadius:10,padding:12,textAlign:"center"}}><div style={{fontSize:11,color:"#888"}}>Продажи</div><div style={{fontSize:18,fontWeight:700,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayData.totalSales)}</div></div>
         <div style={{flex:1,background:"#00aaff12",borderRadius:10,padding:12,textAlign:"center"}}><div style={{fontSize:11,color:"#888"}}>Аренда</div><div style={{fontSize:18,fontWeight:700,color:"#00aaff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayData.totalRentals)}</div></div>
@@ -727,6 +835,89 @@ function StockView({ data, save }) {
       })}
     </div>
   );
+}
+
+// ====== APP BOOKINGS (Брони приложений) ======
+function AppBookingsView({data, save, openModal}) {
+  const bookings = data.appBookings || [];
+  const [confirmIdx, setConfirmIdx] = useState(null);
+  const [editIdx, setEditIdx] = useState(null);
+
+  if (editIdx !== null) {
+    const b = bookings[editIdx];
+    return <EditAppBooking b={b} idx={editIdx} data={data} save={save} onClose={() => setEditIdx(null)} />;
+  }
+
+  return (<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <h3 style={{margin:0,fontSize:16,fontWeight:600}}>Брони приложений</h3>
+      <button onClick={() => openModal("appBooking")} style={{background:"#ff6bff18",border:"1px solid #ff6bff40",borderRadius:8,color:"#ff6bff",padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>+ Новая</button>
+    </div>
+    {confirmIdx !== null && <ConfirmModal msg="Удалить бронь приложения?" onConfirm={() => { const nb = [...bookings]; nb.splice(confirmIdx, 1); save({...data, appBookings: nb}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
+    {!bookings.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет броней приложений</div> :
+    [...bookings].reverse().map((b, i) => {
+      const realIdx = bookings.length - 1 - i;
+      const isDone = b.status === "done";
+      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${isDone ? "#00ff87" : "#ff6bff"}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={() => setEditIdx(realIdx)}>
+          <div>
+            <div style={{fontSize:14,fontWeight:600}}>{b.name || "—"} · {b.phone || "—"}</div>
+            <div style={{fontSize:12,color:"#666",marginTop:2}}>{b.date} · {b.qty || 1} прилож.{b.note ? ` · ${b.note}` : ""}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:isDone ? "#00ff8722" : "#ff6bff22",color:isDone ? "#00ff87" : "#ff6bff"}}>{isDone ? "Выполнена" : "Ожидает"}</span>
+            {b.amount > 0 && <div style={{fontSize:14,fontWeight:700,color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{fmtM(b.amount)}</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:8}}>
+          {!isDone && <button onClick={e => { e.stopPropagation(); const nb = [...bookings]; nb[realIdx] = {...nb[realIdx], status: "done"}; save({...data, appBookings: nb}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Выполнена</button>}
+          <button onClick={e => { e.stopPropagation(); setEditIdx(realIdx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
+          <button onClick={e => { e.stopPropagation(); setConfirmIdx(realIdx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+
+function AppBookingForm({onClose, onSave}) {
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState("1");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(fmtD(new Date()));
+  const amount = (Number(qty) || 1) * 12000;
+
+  return (<Modal onClose={onClose} title="📱 Бронь приложения"><div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
+    <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
+    <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
+    <label style={lbl}>Количество приложений</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} style={inp} min="1" />
+    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span></div>
+    <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
+    <button onClick={() => onSave({phone, name, qty: Number(qty) || 1, note, date, amount, status: "pending"})} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить бронь</button>
+  </div></Modal>);
+}
+
+function EditAppBooking({b, idx, data, save, onClose}) {
+  const [phone, setPhone] = useState(b.phone || "");
+  const [name, setName] = useState(b.name || "");
+  const [qty, setQty] = useState(String(b.qty || 1));
+  const [note, setNote] = useState(b.note || "");
+  const [date, setDate] = useState(b.date);
+  const [status, setStatus] = useState(b.status || "pending");
+  const amount = (Number(qty) || 1) * 12000;
+
+  return (<Modal onClose={onClose} title="✏️ Редактировать бронь прилож."><div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <label style={lbl}>Статус</label>
+    <select value={status} onChange={e => setStatus(e.target.value)} style={inp}><option value="pending">Ожидает</option><option value="done">Выполнена</option></select>
+    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
+    <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
+    <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
+    <label style={lbl}>Количество приложений</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} style={inp} />
+    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span></div>
+    <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
+    <button onClick={() => { const nb = [...(data.appBookings||[])]; nb[idx] = {phone, name, qty: Number(qty)||1, note, date, amount, status}; save({...data, appBookings: nb}); onClose(); }} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить</button>
+  </div></Modal>);
 }
 
 const lbl={fontSize:13,color:"#888"};
