@@ -95,7 +95,7 @@ const SEED_APP_BOOKINGS = [
   { date: "2026-02-26", phone: "+7(918)831-98-65", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
 ];
 
-const init = () => ({ sales: SEED, rentals: [], appBookings: SEED_APP_BOOKINGS, products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
+const init = () => ({ sales: SEED, rentals: [], appBookings: SEED_APP_BOOKINGS, appointments: [], products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
 
 function checkCreds(u, p) {
   return u === "chiko" && p === "Alanchiko!!";
@@ -269,17 +269,18 @@ function MainApp({ onLogout }){
         </div>
       </div>
       <div style={{display:"flex",gap:0,borderBottom:"1px solid #222",background:"#0d0d15",overflowX:"auto"}}>
-        {[{id:"dashboard",l:"📊 Дашборд"},{id:"calendar",l:"📅 Календарь"},{id:"sales",l:"💰 Продажи"},{id:"rentals",l:"📦 Аренда"},{id:"apps",l:"📱 Прилож."},{id:"stock",l:"🏪 Склад"},{id:"clients",l:"👥 Клиенты"}].map(t=>(
+        {[{id:"dashboard",l:"📊 Дашборд"},{id:"calendar",l:"📅 Календарь"},{id:"sales",l:"💰 Продажи"},{id:"rentals",l:"📦 Аренда"},{id:"appointments",l:"📋 Записи"},{id:"apps",l:"📱 Прилож."},{id:"stock",l:"🏪 Склад"},{id:"clients",l:"👥 Клиенты"}].map(t=>(
           <button key={t.id} onClick={()=>setView(t.id)} style={{flex:"0 0 auto",padding:"12px 10px",background:"transparent",border:"none",borderBottom:view===t.id?"2px solid #00ff87":"2px solid transparent",color:view===t.id?"#00ff87":"#666",fontSize:12,fontWeight:view===t.id?700:400,cursor:"pointer",whiteSpace:"nowrap"}}>{t.l}</button>
         ))}
       </div>
       <div style={{padding:"16px 16px 0"}}>
         {view==="dashboard"&&<Dashboard stats={stats} data={data} maxMo={maxMo} />}
         {view==="calendar"&&<CalendarView data={data} selMonth={selMonth} setSelMonth={setSelMonth} onDayClick={setDetailDay} onBook={(day)=>{setModal({type:"bookingDate",date:day})}} />}
-        {detailDay&&<DayDetail day={detailDay} dayData={dayData} onClose={()=>setDetailDay(null)} onAddSale={()=>{setDetailDay(null);openModal("sale")}} onAddRental={()=>{setDetailDay(null);openModal("booking")}} />}
+        {detailDay&&<DayDetail day={detailDay} dayData={dayData} onClose={()=>setDetailDay(null)} onAddSale={()=>{setDetailDay(null);openModal("sale")}} onAddRental={()=>{setDetailDay(null);openModal("booking")}} onAddAppointment={()=>{const d=detailDay;setDetailDay(null);openModal("appointmentDate",{date:d})}} />}
         {view==="sales"&&<SalesList data={data} save={save} onEdit={(idx)=>openModal("editSale",{idx})}/>}
         {view==="rentals"&&<RentalsList data={data} save={save} onEdit={(idx)=>openModal("editRental",{idx})}/>}
         {view==="apps"&&<AppBookingsView data={data} save={save} openModal={openModal} />}
+        {view==="appointments"&&<AppointmentsView data={data} save={save} openModal={openModal} />}
         {view==="clients"&&<ClientsView clients={clients} data={data} save={save}/>}
         {view==="stock"&&<StockView data={data} save={save}/>}
       </div>
@@ -292,6 +293,7 @@ function MainApp({ onLogout }){
         <button onClick={()=>openModal("rental")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#00aaff15",border:"1px solid #00aaff40",borderRadius:12,color:"#00aaff",fontSize:14,fontWeight:600,cursor:"pointer"}}>📦 Аренда</button>
         <button onClick={()=>openModal("booking")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#ffaa0015",border:"1px solid #ffaa0040",borderRadius:12,color:"#ffaa00",fontSize:14,fontWeight:600,cursor:"pointer"}}>🔖 Бронь аренды</button>
         <button onClick={()=>openModal("appBooking")} style={{flex:"1 1 45%",padding:"20px 16px",background:"#ff6bff15",border:"1px solid #ff6bff40",borderRadius:12,color:"#ff6bff",fontSize:14,fontWeight:600,cursor:"pointer"}}>📱 Бронь прилож.</button>
+        <button onClick={()=>openModal("appointment")} style={{flex:"1 1 95%",padding:"20px 16px",background:"#66ccff15",border:"1px solid #66ccff40",borderRadius:12,color:"#66ccff",fontSize:14,fontWeight:600,cursor:"pointer"}}>📋 Запись клиента</button>
       </div></Modal>}
 
       {modal?.type==="sale"&&<SaleForm products={data.products} stock={data.stock?.sale||{}} selDate={selDate} onClose={closeModal} onSave={s=>{
@@ -310,6 +312,8 @@ function MainApp({ onLogout }){
       {modal?.type==="confirm"&&<ConfirmModal msg={modal.msg} onConfirm={()=>{modal.onConfirm();closeModal()}} onClose={closeModal}/>}
       {modal?.type==="editClient"&&<EditClientModal client={modal.client} data={data} save={save} onClose={closeModal}/>}
       {modal?.type==="appBooking"&&<AppBookingForm onClose={closeModal} onSave={b => { save({...data, appBookings: [...(data.appBookings||[]), b]}); closeModal(); }} />}
+      {modal?.type==="appointment"&&<AppointmentForm selDate={modal.date||selDate} onClose={closeModal} onSave={a => { save({...data, appointments: [...(data.appointments||[]), a]}); closeModal(); }} />}
+      {modal?.type==="appointmentDate"&&<AppointmentForm selDate={modal.date} onClose={closeModal} onSave={a => { save({...data, appointments: [...(data.appointments||[]), a]}); closeModal(); }} />}
       {modal?.type==="bookingDate"&&<RentalForm kind="booking" selDate={modal.date} rp={data.rentalProducts} onClose={closeModal} onSave={r => { save({...data, rentals:[...data.rentals, r]}); closeModal(); }} />}
 
       {prodModal&&<ProductManager products={data.products} rp={data.rentalProducts} onClose={()=>setProdModal(false)} onSave={(p,rp)=>{save({...data,products:p,rentalProducts:rp});setProdModal(false)}}/>}
@@ -777,15 +781,16 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
 }
 
 // ====== DAY DETAIL ======
-function DayDetail({day,dayData,onClose,onAddSale,onAddRental}){
+function DayDetail({day,dayData,onClose,onAddSale,onAddRental,onAddAppointment}){
   if(!dayData)return null;const d=new Date(day);const label=`${d.getDate()} ${MR[d.getMonth()]}`;
   const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};const stL={booking:"Ожидает",active:"Активная",done:"Завершена"};
   return (<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#111118",borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto",border:"1px solid #222"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,fontSize:17,fontWeight:700}}>{label}</h3><button onClick={onClose} style={{background:"#222",border:"none",color:"#888",width:32,height:32,borderRadius:"50%",fontSize:16,cursor:"pointer"}}>✕</button></div>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
-        <button onClick={onAddSale} style={{flex:1,padding:"10px",background:"#00ff8712",border:"1px solid #00ff8730",borderRadius:10,color:"#00ff87",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ Продажа</button>
-        <button onClick={onAddRental} style={{flex:1,padding:"10px",background:"#ffaa0012",border:"1px solid #ffaa0030",borderRadius:10,color:"#ffaa00",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ Бронь аренды</button>
+        <button onClick={onAddSale} style={{flex:1,padding:"10px",background:"#00ff8712",border:"1px solid #00ff8730",borderRadius:10,color:"#00ff87",fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Продажа</button>
+        <button onClick={onAddRental} style={{flex:1,padding:"10px",background:"#ffaa0012",border:"1px solid #ffaa0030",borderRadius:10,color:"#ffaa00",fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Бронь</button>
+        <button onClick={onAddAppointment} style={{flex:1,padding:"10px",background:"#66ccff12",border:"1px solid #66ccff30",borderRadius:10,color:"#66ccff",fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Запись</button>
       </div>
       <div style={{display:"flex",gap:12,marginBottom:16}}>
         <div style={{flex:1,background:"#00ff8712",borderRadius:10,padding:12,textAlign:"center"}}><div style={{fontSize:11,color:"#888"}}>Продажи</div><div style={{fontSize:18,fontWeight:700,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayData.totalSales)}</div></div>
@@ -997,6 +1002,116 @@ function EditAppBooking({b, idx, data, save, onClose}) {
     <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span> · Прибыль: <span style={{color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(profit)}</span></div>
     <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
     <button onClick={() => { const nb = [...(data.appBookings||[])]; nb[idx] = {phone, name, qty: Number(qty)||1, note, date, amount, cost, status}; save({...data, appBookings: nb}); onClose(); }} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить</button>
+  </div></Modal>);
+}
+
+// ====== APPOINTMENTS / ЗАПИСИ ======
+function AppointmentsView({data, save, openModal}) {
+  const appts = data.appointments || [];
+  const [confirmIdx, setConfirmIdx] = useState(null);
+  const [editIdx, setEditIdx] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusChange, setStatusChange] = useState(null);
+
+  const stC = {pending: "#66ccff", done: "#00ff87", cancelled: "#ff4444"};
+  const stL = {pending: "Ожидает", done: "Пришёл", cancelled: "Отменена"};
+
+  const filtered = useMemo(() => {
+    const list = appts.map((a, i) => ({...a, _idx: i}));
+    if (!search || search === "+7") return list.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).reverse();
+    const q = formatPhone(search);
+    const ql = search.toLowerCase();
+    return list.filter(a => (a.phone || "").includes(q) || (a.phone || "").includes(search) || (a.name || "").toLowerCase().includes(ql)).reverse();
+  }, [appts, search]);
+
+  if (editIdx !== null) {
+    const a = appts[editIdx];
+    return <EditAppointment a={a} idx={editIdx} data={data} save={save} onClose={() => setEditIdx(null)} />;
+  }
+
+  return (<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <h3 style={{margin:0,fontSize:16,fontWeight:600}}>Записи клиентов</h3>
+      <button onClick={() => openModal("appointment")} style={{background:"#66ccff18",border:"1px solid #66ccff40",borderRadius:8,color:"#66ccff",padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>+ Новая</button>
+    </div>
+    <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
+    {confirmIdx !== null && <ConfirmModal msg="Удалить запись?" onConfirm={() => { const na = [...appts]; na.splice(confirmIdx, 1); save({...data, appointments: na}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
+    {statusChange !== null && <ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={() => { const na = [...appts]; na[statusChange.idx] = {...na[statusChange.idx], status: statusChange.newStatus}; save({...data, appointments: na}); setStatusChange(null); }} onClose={() => setStatusChange(null)} />}
+    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search && search !== "+7" ? "Ничего не найдено" : "Пока нет записей"}</div> :
+    filtered.map((a, i) => {
+      const isPending = a.status === "pending" || !a.status;
+      const nextSt = isPending ? "done" : a.status === "done" ? "cancelled" : "pending";
+      const nextLbl = stL[nextSt];
+      const nextClr = stC[nextSt];
+      const curClr = stC[a.status || "pending"];
+      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${curClr}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={() => setEditIdx(a._idx)}>
+          <div>
+            <div style={{fontSize:14,fontWeight:600}}>{a.name || "—"} · {a.phone || "—"}</div>
+            <div style={{fontSize:12,color:"#666",marginTop:2}}>{a.date} · {a.time || "—"} · {a.purpose === "purchase" ? "Покупка" : a.purpose === "consultation" ? "Консультация" : a.purpose || "—"}</div>
+            {a.note && <div style={{fontSize:11,color:"#555",marginTop:2}}>{a.note}</div>}
+          </div>
+          <div style={{textAlign:"right"}}>
+            <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:curClr + "22",color:curClr}}>{stL[a.status || "pending"]}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:8}}>
+          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: a._idx, newStatus: nextSt, label: nextLbl}); }} style={{background:nextClr+"22",border:`1px solid ${nextClr}44`,borderRadius:6,color:nextClr,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLbl}</button>
+          <button onClick={e => { e.stopPropagation(); setEditIdx(a._idx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
+          <button onClick={e => { e.stopPropagation(); setConfirmIdx(a._idx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+
+function AppointmentForm({selDate, onClose, onSave}) {
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [date, setDate] = useState(selDate || fmtD(new Date()));
+  const [time, setTime] = useState("");
+  const [purpose, setPurpose] = useState("purchase");
+  const [note, setNote] = useState("");
+
+  return (<Modal onClose={onClose} title="📋 Новая запись"><div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
+    <label style={lbl}>Время</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={inp} />
+    <label style={lbl}>Что хотят</label>
+    <select value={purpose} onChange={e => setPurpose(e.target.value)} style={inp}>
+      <option value="purchase">Покупка</option>
+      <option value="consultation">Консультация</option>
+    </select>
+    <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
+    <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
+    <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
+    <button onClick={() => onSave({phone, name, date, time, purpose, note, status: "pending"})} style={{...btnG, background:"linear-gradient(135deg,#66ccff,#3399cc)"}}>Сохранить запись</button>
+  </div></Modal>);
+}
+
+function EditAppointment({a, idx, data, save, onClose}) {
+  const [phone, setPhone] = useState(a.phone || "");
+  const [name, setName] = useState(a.name || "");
+  const [date, setDate] = useState(a.date || "");
+  const [time, setTime] = useState(a.time || "");
+  const [purpose, setPurpose] = useState(a.purpose || "purchase");
+  const [note, setNote] = useState(a.note || "");
+  const [status, setStatus] = useState(a.status || "pending");
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  if (confirmDel) return <ConfirmModal msg="Удалить запись?" onConfirm={() => { const na = [...(data.appointments||[])]; na.splice(idx, 1); save({...data, appointments: na}); onClose(); }} onClose={() => setConfirmDel(false)} />;
+
+  return (<Modal onClose={onClose} title="✏️ Редактировать запись"><div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <label style={lbl}>Статус</label>
+    <select value={status} onChange={e => setStatus(e.target.value)} style={inp}><option value="pending">Ожидает</option><option value="done">Пришёл</option><option value="cancelled">Отменена</option></select>
+    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
+    <label style={lbl}>Время</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={inp} />
+    <label style={lbl}>Что хотят</label>
+    <select value={purpose} onChange={e => setPurpose(e.target.value)} style={inp}><option value="purchase">Покупка</option><option value="consultation">Консультация</option></select>
+    <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
+    <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
+    <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
+    <button onClick={() => { const na = [...(data.appointments||[])]; na[idx] = {phone, name, date, time, purpose, note, status}; save({...data, appointments: na}); onClose(); }} style={{...btnG, background:"linear-gradient(135deg,#66ccff,#3399cc)"}}>Сохранить</button>
+    <button onClick={() => setConfirmDel(true)} style={{...btnR, marginTop: 4}}>🗑 Удалить</button>
   </div></Modal>);
 }
 
