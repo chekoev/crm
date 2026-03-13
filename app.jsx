@@ -7,7 +7,7 @@ const PRODUCTS = [
   { id: "flash_77", name: "Flash 77", price: 26000 },{ id: "nano_7", name: "Nano 7", price: 32000 },
   { id: "flash_2026", name: "Flash новинка 2026", price: 39700 },{ id: "flash_mag_2026", name: "Flash новинка Магнит 2026", price: 42500 },
   { id: "knopki_std", name: "Кнопки — Стандарт", price: 2500 },{ id: "knopki_yant", name: "Кнопки — ЯНТ", price: 3500 },
-  { id: "knopki_mini", name: "Кнопки — Мини", price: 5000 },{ id: "iphone_app", name: "Установка на iPhone", price: 12000 },
+  { id: "knopki_mini", name: "Кнопки — Мини", price: 5000 },{ id: "iphone_app", name: "Установка на iPhone", price: 15000 },
 ];
 const RENTAL_PRODUCTS = [
   { id: "r_plat", name: "Plat", price: 1900 },{ id: "r_silver", name: "Silver", price: 2200 },
@@ -83,7 +83,19 @@ function restoreStockFromSale(data, saleIdx) {
   newStock.sale = ss;
   return newStock;
 }
-const init = () => ({ sales: SEED, rentals: [], appBookings: [], products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
+const APP_PRICE = 15000;
+const APP_COST = 10000;
+
+const SEED_APP_BOOKINGS = [
+  { date: "2025-11-02", phone: "+7(918)838-93-95", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
+  { date: "2026-01-29", phone: "+7(928)685-17-03", name: "", qty: 2, amount: 30000, cost: 20000, note: "", status: "pending" },
+  { date: "2026-02-07", phone: "+7(988)834-11-25", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
+  { date: "2026-02-14", phone: "+7(918)828-25-58", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
+  { date: "2026-02-22", phone: "+7(989)741-59-67", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
+  { date: "2026-02-26", phone: "+7(918)831-98-65", name: "", qty: 1, amount: 15000, cost: 10000, note: "", status: "pending" },
+];
+
+const init = () => ({ sales: SEED, rentals: [], appBookings: SEED_APP_BOOKINGS, products: PRODUCTS, rentalProducts: RENTAL_PRODUCTS, stock: initStock() });
 
 function checkCreds(u, p) {
   return u === "chiko" && p === "Alanchiko!!";
@@ -328,22 +340,22 @@ function ConfirmModal({msg,onConfirm,onClose}){
 
 // ====== DASHBOARD ======
 function Dashboard({stats,data,maxMo}){
-  // Category breakdown
+  // Category breakdown — apps counted as PROFIT (amount - cost)
   const cats = useMemo(() => {
     let earphones = 0, rentals = 0, apps = 0, buttons = 0;
-    const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
     const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
       if (s.items) s.items.forEach(it => {
-        if (it.id === "iphone_app") apps += it.price;
+        if (it.id === "iphone_app") apps += Math.max(0, it.price - APP_COST);
         else if (btnIds.has(it.id)) buttons += it.price;
         else earphones += it.price;
       }); else earphones += s.amount;
     });
     data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
-    // App bookings that are completed
-    (data.appBookings || []).filter(b => b.status === "done" && new Date(b.date).getFullYear() === 2026).forEach(b => { apps += (b.amount || 0); });
+    (data.appBookings || []).filter(b => b.status === "done" && new Date(b.date).getFullYear() === 2026).forEach(b => {
+      apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
+    });
     const total = earphones + rentals + apps + buttons;
     const pct = v => total > 0 ? ((v / total) * 100).toFixed(1) : "0.0";
     return { earphones, rentals, apps, buttons, total, pct };
@@ -359,9 +371,10 @@ function Dashboard({stats,data,maxMo}){
 
     <div style={{background:"#111118",borderRadius:16,padding:20,border:"1px solid #1a1a2a",marginBottom:16}}>
       <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:600}}>Доход по месяцам</h3>
-      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:140}}>
-        {stats.monthly.map((m,i)=>{const h=m.t>0?(m.t/maxMo)*120:2;const c=i===new Date().getMonth();return (
-          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+      <div style={{display:"flex",alignItems:"flex-end",gap:4,height:160}}>
+        {stats.monthly.map((m,i)=>{const h=m.t>0?(m.t/maxMo)*120:2;const c=i===new Date().getMonth();const pct=stats.yearTotal>0?((m.t/stats.yearTotal)*100).toFixed(0):"0";return (
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:8,color:"#888",fontFamily:"'JetBrains Mono',monospace"}}>{m.t>0?pct+"%":""}</span>
             <span style={{fontSize:9,color:"#555",fontFamily:"'JetBrains Mono',monospace"}}>{m.t>0?(m.t/1000).toFixed(0)+"к":""}</span>
             <div style={{width:"100%",height:h,borderRadius:4,background:c?"linear-gradient(180deg,#00ff87,#00995a)":m.t>0?"linear-gradient(180deg,#2a2a4a,#1a1a3a)":"#1a1a2a"}}/>
             <span style={{fontSize:10,color:c?"#00ff87":"#555",fontWeight:c?700:400}}>{MS[i]}</span>
@@ -375,7 +388,7 @@ function Dashboard({stats,data,maxMo}){
       {[
         {l:"Наушники (продажа)",v:cats.earphones,c:"#00ff87"},
         {l:"Аренда",v:cats.rentals,c:"#00aaff"},
-        {l:"Приложения",v:cats.apps,c:"#ff6bff"},
+        {l:"Приложения (прибыль)",v:cats.apps,c:"#ff6bff"},
         {l:"Кнопки",v:cats.buttons,c:"#ffaa00"},
       ].map((c,i) => (
         <div key={i} style={{marginBottom:10}}>
@@ -885,16 +898,22 @@ function AppBookingForm({onClose, onSave}) {
   const [qty, setQty] = useState("1");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(fmtD(new Date()));
-  const amount = (Number(qty) || 1) * 12000;
+  const [pricePerApp, setPricePerApp] = useState(String(APP_PRICE));
+  const [costPerApp, setCostPerApp] = useState(String(APP_COST));
+  const amount = (Number(qty) || 1) * (Number(pricePerApp) || APP_PRICE);
+  const cost = (Number(qty) || 1) * (Number(costPerApp) || APP_COST);
+  const profit = amount - cost;
 
   return (<Modal onClose={onClose} title="📱 Бронь приложения"><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
     <label style={lbl}>Количество приложений</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} style={inp} min="1" />
-    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span></div>
+    <label style={lbl}>Цена за 1 прилож.</label><input type="number" value={pricePerApp} onChange={e => setPricePerApp(e.target.value)} style={inp} />
+    <label style={lbl}>Себестоимость за 1 прилож.</label><input type="number" value={costPerApp} onChange={e => setCostPerApp(e.target.value)} style={inp} />
+    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span> · Прибыль: <span style={{color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(profit)}</span></div>
     <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
-    <button onClick={() => onSave({phone, name, qty: Number(qty) || 1, note, date, amount, status: "pending"})} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить бронь</button>
+    <button onClick={() => onSave({phone, name, qty: Number(qty) || 1, note, date, amount, cost, status: "pending"})} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить бронь</button>
   </div></Modal>);
 }
 
@@ -905,7 +924,11 @@ function EditAppBooking({b, idx, data, save, onClose}) {
   const [note, setNote] = useState(b.note || "");
   const [date, setDate] = useState(b.date);
   const [status, setStatus] = useState(b.status || "pending");
-  const amount = (Number(qty) || 1) * 12000;
+  const [pricePerApp, setPricePerApp] = useState(String(b.amount ? Math.round(b.amount / (b.qty || 1)) : APP_PRICE));
+  const [costPerApp, setCostPerApp] = useState(String(b.cost ? Math.round(b.cost / (b.qty || 1)) : APP_COST));
+  const amount = (Number(qty) || 1) * (Number(pricePerApp) || APP_PRICE);
+  const cost = (Number(qty) || 1) * (Number(costPerApp) || APP_COST);
+  const profit = amount - cost;
 
   return (<Modal onClose={onClose} title="✏️ Редактировать бронь прилож."><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Статус</label>
@@ -914,9 +937,11 @@ function EditAppBooking({b, idx, data, save, onClose}) {
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
     <label style={lbl}>Количество приложений</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} style={inp} />
-    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span></div>
+    <label style={lbl}>Цена за 1 прилож.</label><input type="number" value={pricePerApp} onChange={e => setPricePerApp(e.target.value)} style={inp} />
+    <label style={lbl}>Себестоимость за 1 прилож.</label><input type="number" value={costPerApp} onChange={e => setCostPerApp(e.target.value)} style={inp} />
+    <div style={{fontSize:13,color:"#888"}}>Сумма: <span style={{color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(amount)}</span> · Прибыль: <span style={{color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(profit)}</span></div>
     <label style={lbl}>Примечание</label><input value={note} onChange={e => setNote(e.target.value)} style={inp} />
-    <button onClick={() => { const nb = [...(data.appBookings||[])]; nb[idx] = {phone, name, qty: Number(qty)||1, note, date, amount, status}; save({...data, appBookings: nb}); onClose(); }} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить</button>
+    <button onClick={() => { const nb = [...(data.appBookings||[])]; nb[idx] = {phone, name, qty: Number(qty)||1, note, date, amount, cost, status}; save({...data, appBookings: nb}); onClose(); }} style={{...btnG, background:"linear-gradient(135deg,#ff6bff,#cc44cc)"}}>Сохранить</button>
   </div></Modal>);
 }
 
