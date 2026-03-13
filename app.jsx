@@ -328,12 +328,12 @@ function Modal({onClose,title,children}){
     </div></div>);
 }
 
-function ConfirmModal({msg,onConfirm,onClose}){
+function ConfirmModal({msg,onConfirm,onClose,confirmText,confirmColor}){
   return (<Modal onClose={onClose} title="Подтверждение">
     <p style={{fontSize:14,color:"#ccc",marginBottom:20}}>{msg}</p>
     <div style={{display:"flex",gap:12}}>
       <button onClick={onClose} style={{flex:1,padding:"12px",background:"#222",border:"1px solid #333",borderRadius:10,color:"#aaa",fontSize:14,cursor:"pointer"}}>Отмена</button>
-      <button onClick={onConfirm} style={{flex:1,padding:"12px",background:"linear-gradient(135deg,#ff4444,#cc2222)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>Удалить</button>
+      <button onClick={onConfirm} style={{flex:1,padding:"12px",background:confirmColor||"linear-gradient(135deg,#ff4444,#cc2222)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>{confirmText||"Удалить"}</button>
     </div>
   </Modal>);
 }
@@ -353,7 +353,7 @@ function Dashboard({stats,data,maxMo}){
       }); else earphones += s.amount;
     });
     data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
-    (data.appBookings || []).filter(b => b.status === "done" && new Date(b.date).getFullYear() === 2026).forEach(b => {
+    (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
     const total = earphones + rentals + apps + buttons;
@@ -512,7 +512,7 @@ function EditRentalModal({idx,data,save,rp,onClose}){
 
   return (<Modal onClose={onClose} title="✏️ Редактировать аренду"><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Статус</label>
-    <select value={status} onChange={e=>setStatus(e.target.value)} style={inp}><option value="booking">Бронь</option><option value="active">Аренда</option><option value="done">Завершена</option></select>
+    <select value={status} onChange={e=>setStatus(e.target.value)} style={inp}><option value="booking">Ожидает</option><option value="active">Активная</option><option value="done">Завершена</option></select>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={inp}/>
     <label style={lbl}>Модель</label>
     <select value={productId} onChange={e=>{setProductId(e.target.value);const p=rp.find(x=>x.id===e.target.value);if(p){setAmount(String(p.price));setProdName(p.name)}}} style={inp}>
@@ -592,6 +592,7 @@ function RentalForm({kind,selDate,rp,onClose,onSave}){
 // ====== SALES LIST (grouped by date) ======
 function SalesList({data,save,onEdit}){
   const [confirmIdx,setConfirmIdx]=useState(null);
+  const [toRentalIdx,setToRentalIdx]=useState(null);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -602,9 +603,34 @@ function SalesList({data,save,onEdit}){
     return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
   }, [data.sales]);
 
+  const doConvertToRental = () => {
+    if (toRentalIdx === null) return;
+    const sale = data.sales[toRentalIdx];
+    if (!sale) return;
+    const prodName = sale.items ? sale.items.map(it => it.name).join(", ") : (sale.productName || "Продажа");
+    const newRental = {
+      phone: sale.phone || "",
+      lastName: sale.name || "",
+      note: "Переведено из продажи",
+      date: sale.date,
+      productName: prodName,
+      amount: sale.amount,
+      status: "active"
+    };
+    const newStock = restoreStockFromSale(data, toRentalIdx);
+    save({
+      ...data,
+      sales: data.sales.filter((_, j) => j !== toRentalIdx),
+      rentals: [...data.rentals, newRental],
+      stock: newStock
+    });
+    setToRentalIdx(null);
+  };
+
   return (<div>
     <h3 style={{margin:"0 0 12px",fontSize:16,fontWeight:600}}>Продажи</h3>
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту продажу?" onConfirm={()=>{const ns=restoreStockFromSale(data,confirmIdx);save({...data,sales:data.sales.filter((_,j)=>j!==confirmIdx),stock:ns});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
+    {toRentalIdx!==null&&<ConfirmModal msg="Перевести эту продажу в аренду? Продажа будет удалена и создана запись аренды." confirmText="Перевести" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={doConvertToRental} onClose={()=>setToRentalIdx(null)}/>}
     {!data.sales.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет продаж</div> :
     grouped.map(([date, sales]) => {
       const d = new Date(date);
@@ -627,7 +653,8 @@ function SalesList({data,save,onEdit}){
                 </div>
                 <div style={{textAlign:"right",marginLeft:12,flexShrink:0}}>
                   <div style={{fontSize:15,fontWeight:700,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(s.amount)}</div>
-                  <div style={{display:"flex",gap:8,marginTop:4,justifyContent:"flex-end"}}>
+                  <div style={{display:"flex",gap:6,marginTop:4,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                    <button onClick={()=>setToRentalIdx(s._idx)} style={{background:"none",border:"none",color:"#00aaff",fontSize:10,cursor:"pointer"}}>→ аренда</button>
                     <button onClick={()=>onEdit(s._idx)} style={{background:"none",border:"none",color:"#00aaff",fontSize:11,cursor:"pointer"}}>✏️</button>
                     <button onClick={()=>setConfirmIdx(s._idx)} style={{background:"none",border:"none",color:"#ff4444",fontSize:11,cursor:"pointer"}}>🗑</button>
                   </div>
@@ -644,14 +671,22 @@ function SalesList({data,save,onEdit}){
 // ====== RENTALS LIST ======
 function RentalsList({data,save,onEdit}){
   const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};
-  const stL={booking:"Бронь",active:"Аренда",done:"Завершена"};
+  const stL={booking:"Ожидает",active:"Активная",done:"Завершена"};
   const [confirmIdx,setConfirmIdx]=useState(null);
   const [tab,setTab]=useState("all");
+  const [search,setSearch]=useState("");
 
   const filtered = useMemo(() => {
-    if (tab === "bookings") return data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status==="booking").sort((a,b)=>a.date.localeCompare(b.date));
-    return data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking").reverse();
-  }, [data.rentals, tab]);
+    let list;
+    if (tab === "bookings") {
+      list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status==="booking").sort((a,b)=>a.date.localeCompare(b.date));
+    } else {
+      list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking").reverse();
+    }
+    if (!search) return list;
+    const q = search.toLowerCase();
+    return list.filter(r => (r.phone || "").includes(q) || (r.lastName || "").toLowerCase().includes(q));
+  }, [data.rentals, tab, search]);
 
   return (<div>
     <h3 style={{margin:"0 0 8px",fontSize:16,fontWeight:600}}>Аренда и брони</h3>
@@ -660,8 +695,9 @@ function RentalsList({data,save,onEdit}){
         <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:8,background:"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00ff87":"2px solid transparent",color:tab===t.id?"#00ff87":"#666",fontSize:13,cursor:"pointer"}}>{t.l}</button>
       ))}
     </div>
+    <input type="text" placeholder="Поиск по телефону или фамилии..." value={search} onChange={e => setSearch(e.target.value)} style={{...inp, marginBottom: 12}} />
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту запись?" onConfirm={()=>{save({...data,rentals:data.rentals.filter((_,j)=>j!==confirmIdx)});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
-    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
+    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
     filtered.map((r,i)=>{
       return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${stC[r.status]||"#555"}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(r._idx)}>
@@ -738,7 +774,7 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
 // ====== DAY DETAIL ======
 function DayDetail({day,dayData,onClose,onAddSale,onAddRental}){
   if(!dayData)return null;const d=new Date(day);const label=`${d.getDate()} ${MR[d.getMonth()]}`;
-  const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};const stL={booking:"Бронь",active:"Аренда",done:"Завершена"};
+  const stC={booking:"#ffaa00",active:"#00aaff",done:"#00ff87"};const stL={booking:"Ожидает",active:"Активная",done:"Завершена"};
   return (<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#111118",borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto",border:"1px solid #222"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,fontSize:17,fontWeight:700}}>{label}</h3><button onClick={onClose} style={{background:"#222",border:"none",color:"#888",width:32,height:32,borderRadius:"50%",fontSize:16,cursor:"pointer"}}>✕</button></div>
@@ -855,6 +891,14 @@ function AppBookingsView({data, save, openModal}) {
   const bookings = data.appBookings || [];
   const [confirmIdx, setConfirmIdx] = useState(null);
   const [editIdx, setEditIdx] = useState(null);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const list = bookings.map((b, i) => ({...b, _idx: i}));
+    if (!search) return list.reverse();
+    const q = search.toLowerCase();
+    return list.filter(b => (b.phone || "").includes(q) || (b.name || "").toLowerCase().includes(q)).reverse();
+  }, [bookings, search]);
 
   if (editIdx !== null) {
     const b = bookings[editIdx];
@@ -866,26 +910,26 @@ function AppBookingsView({data, save, openModal}) {
       <h3 style={{margin:0,fontSize:16,fontWeight:600}}>Брони приложений</h3>
       <button onClick={() => openModal("appBooking")} style={{background:"#ff6bff18",border:"1px solid #ff6bff40",borderRadius:8,color:"#ff6bff",padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>+ Новая</button>
     </div>
+    <input type="text" placeholder="Поиск по телефону или имени..." value={search} onChange={e => setSearch(e.target.value)} style={{...inp, marginBottom: 12}} />
     {confirmIdx !== null && <ConfirmModal msg="Удалить бронь приложения?" onConfirm={() => { const nb = [...bookings]; nb.splice(confirmIdx, 1); save({...data, appBookings: nb}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
-    {!bookings.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет броней приложений</div> :
-    [...bookings].reverse().map((b, i) => {
-      const realIdx = bookings.length - 1 - i;
-      const isDone = b.status === "done";
-      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${isDone ? "#00ff87" : "#ff6bff"}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={() => setEditIdx(realIdx)}>
+    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search ? "Ничего не найдено" : "Пока нет броней приложений"}</div> :
+    filtered.map((b, i) => {
+      const isInstalled = b.status === "installed" || b.status === "done";
+      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${isInstalled ? "#00ff87" : "#ff6bff"}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={() => setEditIdx(b._idx)}>
           <div>
             <div style={{fontSize:14,fontWeight:600}}>{b.name || "—"} · {b.phone || "—"}</div>
             <div style={{fontSize:12,color:"#666",marginTop:2}}>{b.date} · {b.qty || 1} прилож.{b.note ? ` · ${b.note}` : ""}</div>
           </div>
           <div style={{textAlign:"right"}}>
-            <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:isDone ? "#00ff8722" : "#ff6bff22",color:isDone ? "#00ff87" : "#ff6bff"}}>{isDone ? "Выполнена" : "Ожидает"}</span>
+            <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:isInstalled ? "#00ff8722" : "#ff6bff22",color:isInstalled ? "#00ff87" : "#ff6bff"}}>{isInstalled ? "Установлена" : "Ожидает"}</span>
             {b.amount > 0 && <div style={{fontSize:14,fontWeight:700,color:"#ff6bff",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{fmtM(b.amount)}</div>}
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8}}>
-          {!isDone && <button onClick={e => { e.stopPropagation(); const nb = [...bookings]; nb[realIdx] = {...nb[realIdx], status: "done"}; save({...data, appBookings: nb}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Выполнена</button>}
-          <button onClick={e => { e.stopPropagation(); setEditIdx(realIdx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
-          <button onClick={e => { e.stopPropagation(); setConfirmIdx(realIdx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
+          {!isInstalled && <button onClick={e => { e.stopPropagation(); const nb = [...bookings]; nb[b._idx] = {...nb[b._idx], status: "installed"}; save({...data, appBookings: nb}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✓ Установлена</button>}
+          <button onClick={e => { e.stopPropagation(); setEditIdx(b._idx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
+          <button onClick={e => { e.stopPropagation(); setConfirmIdx(b._idx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
       </div>);
     })}
@@ -932,7 +976,7 @@ function EditAppBooking({b, idx, data, save, onClose}) {
 
   return (<Modal onClose={onClose} title="✏️ Редактировать бронь прилож."><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Статус</label>
-    <select value={status} onChange={e => setStatus(e.target.value)} style={inp}><option value="pending">Ожидает</option><option value="done">Выполнена</option></select>
+    <select value={status} onChange={e => setStatus(e.target.value)} style={inp}><option value="pending">Ожидает</option><option value="installed">Установлена</option></select>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e => setName(e.target.value)} style={inp} />
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp} />
