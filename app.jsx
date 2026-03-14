@@ -229,7 +229,7 @@ function MainApp({ onLogout }){
   const stats=useMemo(()=>{
     const mo=Array(12).fill(0).map(()=>({s:0,r:0,t:0,sc:0,rc:0}));let yt=0;
     data.sales.forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===2026){mo[d.getMonth()].s+=s.amount;mo[d.getMonth()].t+=s.amount;mo[d.getMonth()].sc++;yt+=s.amount}});
-    data.rentals.filter(r=>r.status==="active"||r.status==="done").forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){mo[d.getMonth()].r+=(r.amount||0);mo[d.getMonth()].t+=(r.amount||0);mo[d.getMonth()].rc++;yt+=(r.amount||0)}});
+    data.rentals.forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){const paid=Math.max(0,(r.amount||0)-(r.debt||0));mo[d.getMonth()].r+=paid;mo[d.getMonth()].t+=paid;mo[d.getMonth()].rc++;yt+=paid}});
     return {monthly:mo,yearTotal:yt,remaining:YEAR_PLAN-yt,progress:(yt/YEAR_PLAN)*100};
   },[data]);
 
@@ -358,7 +358,7 @@ function Dashboard({stats,data,maxMo}){
         else if (btnIds.has(it.id)) buttons += it.price;
       }); else earphones += s.amount;
     });
-    data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
+    data.rentals.filter(r => new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += Math.max(0, (r.amount || 0) - (r.debt || 0)); });
     (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
@@ -610,6 +610,7 @@ function RentalForm({kind,selDate,rp,onClose,onSave}){
   const [phone,setPhone]=useState("");const [lastName,setLastName]=useState("");const [note,setNote]=useState("");
   const [amount,setAmount]=useState("");const [date,setDate]=useState(selDate);const [pid,setPid]=useState("");
   const [returnDate,setReturnDate]=useState(tomorrow(selDate));
+  const [debt,setDebt]=useState("0");
   return (<Modal onClose={onClose} title={kind==="booking"?"🔖 Бронь":"📦 Аренда"}><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>{setDate(e.target.value);setReturnDate(tomorrow(e.target.value))}} style={inp}/>
     <label style={lbl}>Вернуть до</label><input type="date" value={returnDate} onChange={e=>setReturnDate(e.target.value)} style={inp}/>
@@ -622,8 +623,9 @@ function RentalForm({kind,selDate,rp,onClose,onSave}){
     <label style={lbl}>Фамилия</label><input value={lastName} onChange={e=>setLastName(e.target.value)} style={inp}/>
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp}/>
     <label style={lbl}>Сумма</label><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} style={inp}/>
+    <label style={lbl}>Долг</label><input type="number" value={debt} onChange={e=>setDebt(e.target.value)} style={inp} placeholder="0"/>
     <label style={lbl}>Примечание</label><input value={note} onChange={e=>setNote(e.target.value)} style={inp}/>
-    <button onClick={()=>{const sel=rp.find(x=>x.id===pid);onSave({phone,lastName,note,date,returnDate,productName:sel?sel.name:"—",amount:Number(amount)||0,status:kind==="booking"?"booking":"active"})}} style={kind==="booking"?btnY:btnB}>{kind==="booking"?"Сохранить бронь":"Сохранить аренду"}</button>
+    <button onClick={()=>{const sel=rp.find(x=>x.id===pid);onSave({phone,lastName,note,date,returnDate,debt:Number(debt)||0,productName:sel?sel.name:"—",amount:Number(amount)||0,status:kind==="booking"?"booking":"active"})}} style={kind==="booking"?btnY:btnB}>{kind==="booking"?"Сохранить бронь":"Сохранить аренду"}</button>
   </div></Modal>);
 }
 
@@ -635,52 +637,52 @@ function SalesList({data,save,onEdit}){
   const grouped = useMemo(() => {
     const map = {};
     data.sales.forEach((s, idx) => {
-      if (!map[s.date]) map[s.date] = [];
-      map[s.date].push({ ...s, _idx: idx });
+      if (!map[s.date]) map[s.date] = {sales:[],rentals:[],apps:[]};
+      map[s.date].sales.push({ ...s, _idx: idx });
     });
-    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [data.sales]);
+    // Add rentals and bookings to date groups
+    data.rentals.forEach(r => {
+      if (!map[r.date]) map[r.date] = {sales:[],rentals:[],apps:[]};
+      map[r.date].rentals.push(r);
+    });
+    (data.appBookings||[]).forEach(b => {
+      if (!map[b.date]) map[b.date] = {sales:[],rentals:[],apps:[]};
+      map[b.date].apps.push(b);
+    });
+    // Only show dates that have sales
+    return Object.entries(map).filter(([_,v])=>v.sales.length>0).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [data.sales, data.rentals, data.appBookings]);
 
   const doConvertToRental = () => {
     if (toRentalIdx === null) return;
     const sale = data.sales[toRentalIdx];
     if (!sale) return;
     const prodName = sale.items ? sale.items.map(it => it.name).join(", ") : (sale.productName || "Продажа");
-    const newRental = {
-      phone: sale.phone || "",
-      lastName: sale.name || "",
-      note: "Переведено из продажи",
-      date: sale.date,
-      productName: prodName,
-      amount: sale.amount,
-      status: "active"
-    };
+    const newRental = { phone: sale.phone || "", lastName: sale.name || "", note: "Переведено из продажи", date: sale.date, productName: prodName, amount: sale.amount, debt: 0, status: "active", returnDate: tomorrow(sale.date) };
     const newStock = restoreStockFromSale(data, toRentalIdx);
-    save({
-      ...data,
-      sales: data.sales.filter((_, j) => j !== toRentalIdx),
-      rentals: [...data.rentals, newRental],
-      stock: newStock
-    });
+    save({ ...data, sales: data.sales.filter((_, j) => j !== toRentalIdx), rentals: [...data.rentals, newRental], stock: newStock });
     setToRentalIdx(null);
   };
 
   return (<div>
     <h3 style={{margin:"0 0 12px",fontSize:16,fontWeight:600}}>Продажи</h3>
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту продажу?" onConfirm={()=>{const ns=restoreStockFromSale(data,confirmIdx);save({...data,sales:data.sales.filter((_,j)=>j!==confirmIdx),stock:ns});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
-    {toRentalIdx!==null&&<ConfirmModal msg="Перевести эту продажу в аренду? Продажа будет удалена и создана запись аренды." confirmText="Перевести" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={doConvertToRental} onClose={()=>setToRentalIdx(null)}/>}
+    {toRentalIdx!==null&&<ConfirmModal msg="Перевести эту продажу в аренду?" confirmText="Перевести" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={doConvertToRental} onClose={()=>setToRentalIdx(null)}/>}
     {!data.sales.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет продаж</div> :
-    grouped.map(([date, sales]) => {
+    grouped.map(([date, group]) => {
       const d = new Date(date);
-      const dayTotal = sales.reduce((a, s) => a + s.amount, 0);
-      const dayLabel = `${d.getDate()} ${MR[d.getMonth()]}`;
+      const dayLabel = d.getDate() + " " + MR[d.getMonth()];
+      const salesTotal = group.sales.reduce((a, s) => a + s.amount, 0);
+      const rentalsTotal = group.rentals.reduce((a, r) => a + Math.max(0, (r.amount||0) - (r.debt||0)), 0);
+      const appsTotal = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0);
+      const dayGrand = salesTotal + rentalsTotal + appsTotal;
       return (
         <div key={date} style={{marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8,padding:"0 4px"}}>
             <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{dayLabel}</span>
-            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayTotal)}</span>
+            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(salesTotal)}</span>
           </div>
-          {sales.map((s, i) => {
+          {group.sales.map((s, i) => {
             const label = s.items ? s.items.map(it => it.name).join(", ") : (s.productName || "Продажа");
             return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -700,6 +702,18 @@ function SalesList({data,save,onEdit}){
               </div>
             </div>);
           })}
+          {/* Day grand total */}
+          <div style={{background:"#0d0d15",borderRadius:10,padding:"10px 14px",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#888"}}>ИТОГ:</div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:16,fontWeight:700,color:"#fff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayGrand)}</div>
+              {(rentalsTotal > 0 || appsTotal > 0) && <div style={{fontSize:10,color:"#666",marginTop:2}}>
+                {salesTotal > 0 && <span>Продажи {fmtM(salesTotal)}</span>}
+                {rentalsTotal > 0 && <span>{salesTotal > 0 ? " + " : ""}Аренда {fmtM(rentalsTotal)}</span>}
+                {appsTotal > 0 && <span>{(salesTotal > 0 || rentalsTotal > 0) ? " + " : ""}Прилож. {fmtM(appsTotal)}</span>}
+              </div>}
+            </div>
+          </div>
         </div>
       );
     })}
@@ -767,6 +781,7 @@ function RentalsList({data,save,onEdit}){
               <div style={{textAlign:"right"}}>
                 <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:stC[r.status]+"22",color:stC[r.status]}}>{stL[r.status]}</span>
                 {r.amount>0&&<div style={{fontSize:14,fontWeight:700,color:"#00aaff",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{fmtM(r.amount)}</div>}
+                {(r.debt||0)>0?<div style={{fontSize:11,fontWeight:700,color:"#ff4444",marginTop:2}}>Долг: {fmtM(r.debt)}</div>:r.amount>0?<div style={{fontSize:10,color:"#00ff87",marginTop:2}}>Оплачено</div>:null}
               </div>
             </div>
             <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
@@ -868,9 +883,18 @@ function DayDetail({day,dayData,onClose,onAddSale,onAddRental,onAddAppointment})
 function ProductManager({products,rp,onClose,onSave}){
   const [tab,setTab]=useState("sales");const [sl,setSl]=useState([...products]);const [rl,setRl]=useState([...rp]);
   const [nn,setNn]=useState("");const [np,setNp]=useState("");const list=tab==="sales"?sl:rl;const setList=tab==="sales"?setSl:setRl;
+  const move=(i,dir)=>{const n=[...list];const j=i+dir;if(j<0||j>=n.length)return;const tmp=n[i];n[i]=n[j];n[j]=tmp;setList(n)};
   return (<Modal onClose={onClose} title="⚙ Управление товарами">
     <div style={{display:"flex",marginBottom:16}}>{[{id:"sales",l:"Продажа"},{id:"rentals",l:"Аренда"}].map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:8,background:"transparent",border:"none",borderBottom:tab===t.id?"2px solid #00ff87":"2px solid transparent",color:tab===t.id?"#00ff87":"#666",fontSize:13,cursor:"pointer"}}>{t.l}</button>)}</div>
-    <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>{list.map((p,i)=>(<div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #1a1a2a"}}><span style={{flex:1,fontSize:13}}>{p.name}</span><span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(p.price)}</span><button onClick={()=>setList(list.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#ff4444",fontSize:14,cursor:"pointer"}}>✕</button></div>))}</div>
+    <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>{list.map((p,i)=>(<div key={p.id+i} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 0",borderBottom:"1px solid #1a1a2a"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <button onClick={()=>move(i,-1)} style={{background:"none",border:"none",color:i===0?"#333":"#888",fontSize:10,cursor:"pointer",padding:0}}>▲</button>
+        <button onClick={()=>move(i,1)} style={{background:"none",border:"none",color:i===list.length-1?"#333":"#888",fontSize:10,cursor:"pointer",padding:0}}>▼</button>
+      </div>
+      <span style={{flex:1,fontSize:13}}>{p.name}</span>
+      <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(p.price)}</span>
+      <button onClick={()=>setList(list.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#ff4444",fontSize:14,cursor:"pointer"}}>✕</button>
+    </div>))}</div>
     <div style={{display:"flex",gap:8,marginBottom:12}}><input placeholder="Название" value={nn} onChange={e=>setNn(e.target.value)} style={{...inp,flex:2}}/><input placeholder="Цена" type="number" value={np} onChange={e=>setNp(e.target.value)} style={{...inp,flex:1}}/><button onClick={()=>{if(nn&&np){setList([...list,{id:(tab==="sales"?"p_":"r_")+Date.now(),name:nn,price:Number(np)}]);setNn("");setNp("")}}} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:8,color:"#00ff87",padding:"0 12px",cursor:"pointer",fontWeight:700}}>+</button></div>
     <button onClick={()=>onSave(sl,rl)} style={btnG}>Сохранить</button>
   </Modal>);
