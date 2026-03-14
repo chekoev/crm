@@ -759,7 +759,7 @@ function RentalsList({data,save,onEdit}){
               </div>
             </div>
             <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-              {ns&&<button onClick={e=>{e.stopPropagation();if(ns==="active"&&r.status==="booking"){const a=prompt("Сумма аренды:");if(!a)return;const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date()),returnDate:nr[r._idx].returnDate||tomorrow(fmtD(new Date()))};save({...data,rentals:nr})}else{setStatusChange({idx:r._idx,newStatus:ns,label:nextStL[r.status]})}}} style={{background:stC[ns]+"22",border:`1px solid ${stC[ns]}44`,borderRadius:6,color:stC[ns],padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextStL[r.status]}</button>}
+              {ns&&<button onClick={e=>{e.stopPropagation();if(ns==="active"&&r.status==="booking"){const a=prompt("Сумма аренды:");if(!a)return;const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date()),returnDate:nr[r._idx].returnDate||tomorrow(fmtD(new Date()))};save({...data,rentals:nr})}else{setStatusChange({idx:r._idx,newStatus:ns,label:nextStL[r.status]})}}} style={{background:stC[ns]+"22",border:"1px solid "+stC[ns]+"44",borderRadius:6,color:stC[ns],padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextStL[r.status]}</button>}
               {r.phone&&r.status==="active"&&<a href={waLink(r.phone)} target="_blank" rel="noopener" onClick={e=>e.stopPropagation()} style={{background:"#25D36622",border:"1px solid #25D36644",borderRadius:6,color:"#25D366",padding:"4px 10px",fontSize:11,cursor:"pointer",textDecoration:"none"}}>WhatsApp</a>}
               <button onClick={e=>{e.stopPropagation();onEdit(r._idx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
               <button onClick={e=>{e.stopPropagation();setConfirmIdx(r._idx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
@@ -994,7 +994,7 @@ function AppBookingsView({data, save, openModal}) {
           </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:8}}>
-          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: b._idx, newStatus: nextStatus, label: nextLabel}); }} style={{background:nextColor+"22",border:`1px solid ${nextColor}44`,borderRadius:6,color:nextColor,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLabel}</button>
+          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: b._idx, newStatus: nextStatus, label: nextLabel}); }} style={{background:nextColor+"22",border:"1px solid "+nextColor+"44",borderRadius:6,color:nextColor,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLabel}</button>
           <button onClick={e => { e.stopPropagation(); setEditIdx(b._idx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
           <button onClick={e => { e.stopPropagation(); setConfirmIdx(b._idx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
@@ -1107,7 +1107,7 @@ function AppointmentsView({data, save, openModal}) {
           </div>
         </div>
         <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: a._idx, newStatus: nextSt, label: nextLbl}); }} style={{background:nextClr+"22",border:`1px solid ${nextClr}44`,borderRadius:6,color:nextClr,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLbl}</button>
+          <button onClick={e => { e.stopPropagation(); setStatusChange({idx: a._idx, newStatus: nextSt, label: nextLbl}); }} style={{background:nextClr+"22",border:"1px solid "+nextClr+"44",borderRadius:6,color:nextClr,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLbl}</button>
           {a.phone&&<a href={waLink(a.phone)} target="_blank" rel="noopener" onClick={e=>e.stopPropagation()} style={{background:"#25D36622",border:"1px solid #25D36644",borderRadius:6,color:"#25D366",padding:"4px 10px",fontSize:11,cursor:"pointer",textDecoration:"none"}}>WhatsApp</a>}
           <button onClick={e => { e.stopPropagation(); const ns=[...(data.sales)]; ns.push({date:a.date,items:[{name:"Из записи",price:0}],amount:0,phone:a.phone||"",name:a.name||""}); const na=[...(data.appointments||[])]; na.splice(a._idx,1); save({...data,sales:ns,appointments:na}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Продажа</button>
           <button onClick={e => { e.stopPropagation(); const nr=[...(data.rentals)]; nr.push({date:a.date,phone:a.phone||"",lastName:a.name||"",productName:"—",amount:0,status:"active",returnDate:tomorrow(a.date),note:"Из записи"}); const na=[...(data.appointments||[])]; na.splice(a._idx,1); save({...data,rentals:nr,appointments:na}); }} style={{background:"#00aaff22",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Аренда</button>
