@@ -347,13 +347,15 @@ function ConfirmModal({msg,onConfirm,onClose,confirmText,confirmColor}){
 function Dashboard({stats,data,maxMo}){
   // Category breakdown — apps counted as PROFIT (amount - cost)
   const cats = useMemo(() => {
-    let earphones = 0, rentals = 0, apps = 0, accessories = 0;
+    let earphones = 0, rentals = 0, apps = 0, buttons = 0, accessories = 0;
     const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
+    const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
       if (s.items) s.items.forEach(it => {
-        if (it.id === "iphone_app") apps += Math.max(0, it.price - (it.price >= 15000 ? 10000 : 8000));
+        if (it.id === "iphone_app") apps += Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000)));
         else if (earIds.has(it.id)) earphones += it.price;
+        else if (btnIds.has(it.id)) buttons += it.price;
         else accessories += it.price;
       }); else earphones += s.amount;
     });
@@ -361,9 +363,9 @@ function Dashboard({stats,data,maxMo}){
     (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
-    const total = earphones + rentals + apps + accessories;
+    const total = earphones + rentals + apps + buttons + accessories;
     const pct = v => total > 0 ? ((v / total) * 100).toFixed(1) : "0.0";
-    return { earphones, rentals, apps, accessories, total, pct };
+    return { earphones, rentals, apps, buttons, accessories, total, pct };
   }, [data]);
 
   return (<div>
@@ -394,7 +396,8 @@ function Dashboard({stats,data,maxMo}){
         {l:"Наушники (продажа)",v:cats.earphones,c:"#00ff87"},
         {l:"Аренда",v:cats.rentals,c:"#00aaff"},
         {l:"Приложения (прибыль)",v:cats.apps,c:"#ff6bff"},
-        {l:"Аксессуары",v:cats.accessories,c:"#ffaa00"},
+        {l:"Кнопки",v:cats.buttons,c:"#ffaa00"},
+        {l:"Аксессуары",v:cats.accessories,c:"#cc88ff"},
       ].map((c,i) => (
         <div key={i} style={{marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
@@ -442,8 +445,9 @@ function Dashboard({stats,data,maxMo}){
 function SaleForm({products,stock,selDate,onClose,onSave}){
   const [items,setItems]=useState([]);const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");
   const [phone,setPhone]=useState("");const [name,setName]=useState("");const [date,setDate]=useState(selDate);
-  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;setItems([...items,{id:p.id,name:p.name,price:cpr?Number(cpr):p.price}]);setCp("");setCpr("")};
+  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;const pr=cpr?Number(cpr):p.price;const item={id:p.id,name:p.name,price:pr};if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}setItems([...items,item]);setCp("");setCpr("")};
   const total=items.reduce((a,it)=>a+it.price,0);
+  const totalProfit=items.reduce((a,it)=>a+(it.cost?it.price-it.cost:it.price),0);
   // Count how many of each product already in cart
   const cartCount = {};
   items.forEach(it => { if (it.id) cartCount[it.id] = (cartCount[it.id]||0) + 1; });
@@ -485,7 +489,7 @@ function EditSaleModal({idx,data,save,onClose}){
   const [phone,setPhone]=useState(sale.phone||"");const [name,setName]=useState(sale.name||"");const [date,setDate]=useState(sale.date);
   const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");
   const products=data.products;
-  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;setItems([...items,{id:p.id,name:p.name,price:cpr?Number(cpr):p.price}]);setCp("");setCpr("")};
+  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;const pr=cpr?Number(cpr):p.price;const item={id:p.id,name:p.name,price:pr};if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}setItems([...items,item]);setCp("");setCpr("")};
   const total=items.reduce((a,it)=>a+it.price,0);
   const [confirmDel,setConfirmDel]=useState(false);
 
