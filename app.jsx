@@ -347,23 +347,23 @@ function ConfirmModal({msg,onConfirm,onClose,confirmText,confirmColor}){
 function Dashboard({stats,data,maxMo}){
   // Category breakdown — apps counted as PROFIT (amount - cost)
   const cats = useMemo(() => {
-    let earphones = 0, rentals = 0, apps = 0, buttons = 0;
-    const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
+    let earphones = 0, rentals = 0, apps = 0, accessories = 0;
+    const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
       if (s.items) s.items.forEach(it => {
-        if (it.id === "iphone_app") apps += Math.max(0, it.price - APP_COST);
-        else if (btnIds.has(it.id)) buttons += it.price;
-        else earphones += it.price;
+        if (it.id === "iphone_app") apps += Math.max(0, it.price - (it.price >= 15000 ? 10000 : 8000));
+        else if (earIds.has(it.id)) earphones += it.price;
+        else accessories += it.price;
       }); else earphones += s.amount;
     });
     data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
     (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
-    const total = earphones + rentals + apps + buttons;
+    const total = earphones + rentals + apps + accessories;
     const pct = v => total > 0 ? ((v / total) * 100).toFixed(1) : "0.0";
-    return { earphones, rentals, apps, buttons, total, pct };
+    return { earphones, rentals, apps, accessories, total, pct };
   }, [data]);
 
   return (<div>
@@ -394,7 +394,7 @@ function Dashboard({stats,data,maxMo}){
         {l:"Наушники (продажа)",v:cats.earphones,c:"#00ff87"},
         {l:"Аренда",v:cats.rentals,c:"#00aaff"},
         {l:"Приложения (прибыль)",v:cats.apps,c:"#ff6bff"},
-        {l:"Кнопки",v:cats.buttons,c:"#ffaa00"},
+        {l:"Аксессуары",v:cats.accessories,c:"#ffaa00"},
       ].map((c,i) => (
         <div key={i} style={{marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
@@ -574,12 +574,34 @@ function ItemsList({items,onRemove,total,editable,onPriceChange}){
   </div>);
 }
 
+function waLink(phone) {
+  const digits = (phone || "").replace(/\D/g, "");
+  return `https://wa.me/${digits}`;
+}
+function tomorrow(dateStr) {
+  const d = new Date(dateStr); d.setDate(d.getDate() + 1);
+  return fmtD(d);
+}
+function rentalStatus(r) {
+  if (!r.returnDate) return null;
+  const today = fmtD(new Date());
+  const ret = r.returnDate;
+  const tom = tomorrow(today);
+  if (r.status === "done") return null;
+  if (r.status !== "active") return null;
+  if (ret === tom || ret > today) return {text: "Аренда до " + ret, color: "#00aaff"};
+  if (ret === today) return {text: "Сегодня вернут", color: "#ffaa00"};
+  return {text: "Просрочка аренды!", color: "#ff4444"};
+}
+
 // ====== RENTAL FORM (new) ======
 function RentalForm({kind,selDate,rp,onClose,onSave}){
   const [phone,setPhone]=useState("");const [lastName,setLastName]=useState("");const [note,setNote]=useState("");
   const [amount,setAmount]=useState("");const [date,setDate]=useState(selDate);const [pid,setPid]=useState("");
+  const [returnDate,setReturnDate]=useState(tomorrow(selDate));
   return (<Modal onClose={onClose} title={kind==="booking"?"🔖 Бронь":"📦 Аренда"}><div style={{display:"flex",flexDirection:"column",gap:12}}>
-    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={inp}/>
+    <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>{setDate(e.target.value);setReturnDate(tomorrow(e.target.value))}} style={inp}/>
+    <label style={lbl}>Вернуть до</label><input type="date" value={returnDate} onChange={e=>setReturnDate(e.target.value)} style={inp}/>
     <label style={lbl}>Модель</label>
     <select value={pid} onChange={e=>{setPid(e.target.value);const p=rp.find(x=>x.id===e.target.value);if(p)setAmount(String(p.price))}} style={inp}>
       <option value="">Выберите...</option>
@@ -590,7 +612,7 @@ function RentalForm({kind,selDate,rp,onClose,onSave}){
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp}/>
     <label style={lbl}>Сумма</label><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} style={inp}/>
     <label style={lbl}>Примечание</label><input value={note} onChange={e=>setNote(e.target.value)} style={inp}/>
-    <button onClick={()=>{const sel=rp.find(x=>x.id===pid);onSave({phone,lastName,note,date,productName:sel?sel.name:"—",amount:Number(amount)||0,status:kind==="booking"?"booking":"active"})}} style={kind==="booking"?btnY:btnB}>{kind==="booking"?"Сохранить бронь":"Сохранить аренду"}</button>
+    <button onClick={()=>{const sel=rp.find(x=>x.id===pid);onSave({phone,lastName,note,date,returnDate,productName:sel?sel.name:"—",amount:Number(amount)||0,status:kind==="booking"?"booking":"active"})}} style={kind==="booking"?btnY:btnB}>{kind==="booking"?"Сохранить бронь":"Сохранить аренду"}</button>
   </div></Modal>);
 }
 
@@ -680,7 +702,7 @@ function RentalsList({data,save,onEdit}){
   const nextSt={booking:"active",active:"done"};
   const nextStL={booking:"Активная",active:"Завершена"};
   const [confirmIdx,setConfirmIdx]=useState(null);
-  const [statusChange,setStatusChange]=useState(null); // {idx, newStatus, label}
+  const [statusChange,setStatusChange]=useState(null);
   const [tab,setTab]=useState("all");
   const [search,setSearch]=useState("");
 
@@ -689,13 +711,21 @@ function RentalsList({data,save,onEdit}){
     if (tab === "bookings") {
       list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status==="booking").sort((a,b)=>a.date.localeCompare(b.date));
     } else {
-      list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking").reverse();
+      list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking");
     }
-    if (!search) return list;
-    const q = formatPhone(search);
-    const ql = search.toLowerCase();
-    return list.filter(r => (r.phone || "").includes(q) || (r.phone || "").includes(search) || (r.lastName || "").toLowerCase().includes(ql));
+    if (search && search !== "+7") {
+      const q = formatPhone(search); const ql = search.toLowerCase();
+      list = list.filter(r => (r.phone || "").includes(q) || (r.phone || "").includes(search) || (r.lastName || "").toLowerCase().includes(ql));
+    }
+    return list;
   }, [data.rentals, tab, search]);
+
+  // Group by date
+  const grouped = useMemo(() => {
+    const map = {};
+    filtered.forEach(r => { if (!map[r.date]) map[r.date] = []; map[r.date].push(r); });
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
 
   return (<div>
     <h3 style={{margin:"0 0 8px",fontSize:16,fontWeight:600}}>Аренда и брони</h3>
@@ -707,25 +737,35 @@ function RentalsList({data,save,onEdit}){
     <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту запись?" onConfirm={()=>{save({...data,rentals:data.rentals.filter((_,j)=>j!==confirmIdx)});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
     {statusChange!==null&&<ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={()=>{const nr=[...data.rentals];nr[statusChange.idx]={...nr[statusChange.idx],status:statusChange.newStatus};save({...data,rentals:nr});setStatusChange(null)}} onClose={()=>setStatusChange(null)}/>}
-    {!filtered.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search&&search!=="+7"?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
-    filtered.map((r,i)=>{
-      const ns = nextSt[r.status];
-      return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:8,borderLeft:`3px solid ${stC[r.status]||"#555"}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(r._idx)}>
-          <div>
-            <div style={{fontSize:14,fontWeight:600}}>{r.productName?`${r.productName} · `:""}{r.lastName||"—"} · {r.phone||"—"}</div>
-            <div style={{fontSize:12,color:"#666",marginTop:2}}>{r.date}{r.note?` · ${r.note}`:""}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:stC[r.status]+"22",color:stC[r.status]}}>{stL[r.status]}</span>
-            {r.amount>0&&<div style={{fontSize:14,fontWeight:700,color:"#00aaff",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{fmtM(r.amount)}</div>}
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:8}}>
-          {ns&&<button onClick={e=>{e.stopPropagation();if(ns==="active"&&r.status==="booking"){const a=prompt("Сумма аренды:");if(!a)return;const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date())};save({...data,rentals:nr})}else{setStatusChange({idx:r._idx,newStatus:ns,label:nextStL[r.status]})}}} style={{background:stC[ns]+"22",border:`1px solid ${stC[ns]}44`,borderRadius:6,color:stC[ns],padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextStL[r.status]}</button>}
-          <button onClick={e=>{e.stopPropagation();onEdit(r._idx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
-          <button onClick={e=>{e.stopPropagation();setConfirmIdx(r._idx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
-        </div>
+    {!grouped.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search&&search!=="+7"?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
+    grouped.map(([date, rentals]) => {
+      const d = new Date(date);
+      const dayLabel = `${d.getDate()} ${MR[d.getMonth()]}`;
+      return (<div key={date} style={{marginBottom:16}}>
+        <div style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:8,padding:"0 4px"}}>{dayLabel}</div>
+        {rentals.map((r, i) => {
+          const ns = nextSt[r.status];
+          const rs = rentalStatus(r);
+          return (<div key={i} style={{background:"#111118",borderRadius:12,padding:"12px 16px",border:"1px solid #1a1a2a",marginBottom:6,borderLeft:`3px solid ${stC[r.status]||"#555"}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>onEdit(r._idx)}>
+              <div>
+                <div style={{fontSize:14,fontWeight:600}}>{r.productName?`Аренда ${r.productName}`:""} · {r.lastName||"—"}</div>
+                <div style={{fontSize:12,color:"#666",marginTop:2}}>{r.phone||"—"}{r.note?` · ${r.note}`:""}</div>
+                {rs&&<div style={{fontSize:11,fontWeight:600,color:rs.color,marginTop:3}}>{rs.text}</div>}
+              </div>
+              <div style={{textAlign:"right"}}>
+                <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:stC[r.status]+"22",color:stC[r.status]}}>{stL[r.status]}</span>
+                {r.amount>0&&<div style={{fontSize:14,fontWeight:700,color:"#00aaff",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{fmtM(r.amount)}</div>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+              {ns&&<button onClick={e=>{e.stopPropagation();if(ns==="active"&&r.status==="booking"){const a=prompt("Сумма аренды:");if(!a)return;const nr=[...data.rentals];nr[r._idx]={...nr[r._idx],status:"active",amount:Number(a),date:fmtD(new Date()),returnDate:nr[r._idx].returnDate||tomorrow(fmtD(new Date()))};save({...data,rentals:nr})}else{setStatusChange({idx:r._idx,newStatus:ns,label:nextStL[r.status]})}}} style={{background:stC[ns]+"22",border:`1px solid ${stC[ns]}44`,borderRadius:6,color:stC[ns],padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextStL[r.status]}</button>}
+              {r.phone&&r.status==="active"&&<a href={waLink(r.phone)} target="_blank" rel="noopener" onClick={e=>e.stopPropagation()} style={{background:"#25D36622",border:"1px solid #25D36644",borderRadius:6,color:"#25D366",padding:"4px 10px",fontSize:11,cursor:"pointer",textDecoration:"none"}}>WhatsApp</a>}
+              <button onClick={e=>{e.stopPropagation();onEdit(r._idx)}} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
+              <button onClick={e=>{e.stopPropagation();setConfirmIdx(r._idx)}} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
+            </div>
+          </div>);
+        })}
       </div>);
     })}
   </div>);
@@ -1066,8 +1106,11 @@ function AppointmentsView({data, save, openModal}) {
             <span style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:curClr + "22",color:curClr}}>{stL[a.status || "pending"]}</span>
           </div>
         </div>
-        <div style={{display:"flex",gap:8,marginTop:8}}>
+        <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
           <button onClick={e => { e.stopPropagation(); setStatusChange({idx: a._idx, newStatus: nextSt, label: nextLbl}); }} style={{background:nextClr+"22",border:`1px solid ${nextClr}44`,borderRadius:6,color:nextClr,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ {nextLbl}</button>
+          {a.phone&&<a href={waLink(a.phone)} target="_blank" rel="noopener" onClick={e=>e.stopPropagation()} style={{background:"#25D36622",border:"1px solid #25D36644",borderRadius:6,color:"#25D366",padding:"4px 10px",fontSize:11,cursor:"pointer",textDecoration:"none"}}>WhatsApp</a>}
+          <button onClick={e => { e.stopPropagation(); const ns=[...(data.sales)]; ns.push({date:a.date,items:[{name:"Из записи",price:0}],amount:0,phone:a.phone||"",name:a.name||""}); const na=[...(data.appointments||[])]; na.splice(a._idx,1); save({...data,sales:ns,appointments:na}); }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:6,color:"#00ff87",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Продажа</button>
+          <button onClick={e => { e.stopPropagation(); const nr=[...(data.rentals)]; nr.push({date:a.date,phone:a.phone||"",lastName:a.name||"",productName:"—",amount:0,status:"active",returnDate:tomorrow(a.date),note:"Из записи"}); const na=[...(data.appointments||[])]; na.splice(a._idx,1); save({...data,rentals:nr,appointments:na}); }} style={{background:"#00aaff22",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>→ Аренда</button>
           <button onClick={e => { e.stopPropagation(); setEditIdx(a._idx); }} style={{background:"none",border:"1px solid #00aaff44",borderRadius:6,color:"#00aaff",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✏️</button>
           <button onClick={e => { e.stopPropagation(); setConfirmIdx(a._idx); }} style={{background:"none",border:"1px solid #ff444444",borderRadius:6,color:"#ff4444",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🗑</button>
         </div>
