@@ -22,9 +22,36 @@ const RENTAL_PRODUCTS = [
 const YEAR_PLAN = 7000000;
 const CUTOFF = "2026-03-14";
 const PREV_YEARS = { 2025: 5776400, 2024: 4630750, 2023: 3730250 };
+const CRM_VERSION = "v13";
 function isAppItem(it) { return it.id === "iphone_app" || (it.name && it.name.toLowerCase().indexOf("iphone") >= 0); }
+function isBtnItem(it) { return it.id === "knopki_std" || it.id === "knopki_yant" || it.id === "knopki_mini" || (it.name && it.name.toLowerCase().indexOf("\u043a\u043d\u043e\u043f\u043a") >= 0); }
 function appCost(price) { return price >= 15000 ? 10000 : 8000; }
-function appProfit(it) { return Math.max(0, it.price - appCost(it.price)); }
+function appItemProfit(it) { return Math.max(0, it.price - appCost(it.price)); }
+// Calculate sale revenue: before cutoff = full amount, after cutoff = non-app items full + app items profit
+function saleRevenue(s) {
+  if (s.date < CUTOFF) return s.amount;
+  if (!s.items) return s.amount;
+  var total = 0;
+  for (var i = 0; i < s.items.length; i++) {
+    var it = s.items[i];
+    if (isAppItem(it)) { total += appItemProfit(it); }
+    else { total += it.price; }
+  }
+  return total;
+}
+// Split sale into non-app sum and app-profit sum (for daily report, only after cutoff)
+function saleSplit(s) {
+  if (s.date < CUTOFF) return { sales: s.amount, apps: 0 };
+  if (!s.items) return { sales: s.amount, apps: 0 };
+  var sl = 0, ap = 0;
+  for (var i = 0; i < s.items.length; i++) {
+    var it = s.items[i];
+    if (isAppItem(it)) { ap += appItemProfit(it); }
+    else { sl += it.price; }
+  }
+  return { sales: sl, apps: ap };
+}
+function rentalPaid(r) { return Math.max(0, (r.amount || 0) - (r.debt || 0)); }
 const MR = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const pad = n => String(n).padStart(2,"0");
@@ -174,7 +201,7 @@ function LoginScreen({ onLogin }) {
           >Войти</button>
         </div>
       </div>
-      <div style={{ position: "fixed", bottom: 16, left: 0, right: 0, textAlign: "center", fontSize: 11, color: "#333" }}>mikro_15 CRM v12</div>
+      <div style={{ position: "fixed", bottom: 16, left: 0, right: 0, textAlign: "center", fontSize: 11, color: "#333" }}>mikro_15 CRM v13</div>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}`}</style>
     </div>
   );
@@ -236,12 +263,10 @@ function MainApp({ onLogout }){
     const mo=Array(12).fill(0).map(()=>({s:0,r:0,t:0,sc:0,rc:0}));let yt=0;
     data.sales.forEach(s=>{
       const d=new Date(s.date);if(d.getFullYear()!==2026)return;
-      let profit;
-      if(s.date < CUTOFF){profit=s.amount}
-      else{profit=s.items?s.items.reduce((a,it)=>a+(isAppItem(it)?appProfit(it):it.price),0):s.amount}
-      mo[d.getMonth()].s+=profit;mo[d.getMonth()].t+=profit;mo[d.getMonth()].sc++;yt+=profit;
+      const rev=saleRevenue(s);
+      mo[d.getMonth()].s+=rev;mo[d.getMonth()].t+=rev;mo[d.getMonth()].sc++;yt+=rev;
     });
-    data.rentals.forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){const paid=Math.max(0,(r.amount||0)-(r.debt||0));mo[d.getMonth()].r+=paid;mo[d.getMonth()].t+=paid;mo[d.getMonth()].rc++;yt+=paid}});
+    data.rentals.forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){const paid=rentalPaid(r);mo[d.getMonth()].r+=paid;mo[d.getMonth()].t+=paid;mo[d.getMonth()].rc++;yt+=paid}});
     return {monthly:mo,yearTotal:yt,remaining:YEAR_PLAN-yt,progress:(yt/YEAR_PLAN)*100};
   },[data]);
 
@@ -249,7 +274,7 @@ function MainApp({ onLogout }){
     if(!detailDay)return null;
     const ds=data.sales.filter(s=>s.date===detailDay),dr=data.rentals.filter(r=>r.date===detailDay);
     const da=(data.appointments||[]).filter(a=>a.date===detailDay);
-    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>{if(s.date<CUTOFF)return a+s.amount;if(!s.items)return a+s.amount;return a+s.items.reduce((b,it)=>b+(isAppItem(it)?appProfit(it):it.price),0)},0),totalRentals:dr.reduce((a,r)=>a+Math.max(0,(r.amount||0)-(r.debt||0)),0)};
+    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>a+saleRevenue(s),0),totalRentals:dr.reduce((a,r)=>a+rentalPaid(r),0)};
   },[data,detailDay]);
 
   const clients=useMemo(()=>{
@@ -362,17 +387,16 @@ function Dashboard({stats,data,maxMo}){
     let earphones = 0, rentals = 0, apps = 0, buttons = 0;
     const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
     const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
-    function isBtn(it) { return btnIds.has(it.id) || (it.name && it.name.toLowerCase().indexOf("кнопк") >= 0); }
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
       if (s.date < CUTOFF) { earphones += s.amount; return; }
       if (s.items) s.items.forEach(it => {
-        if (isAppItem(it)) apps += appProfit(it);
-        else if (isBtn(it)) buttons += it.price;
+        if (isAppItem(it)) apps += appItemProfit(it);
+        else if (isBtnItem(it)) buttons += it.price;
         else earphones += it.price;
       }); else earphones += s.amount;
     });
-    data.rentals.filter(r => new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += Math.max(0, (r.amount || 0) - (r.debt || 0)); });
+    data.rentals.filter(r => new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += rentalPaid(r); });
     (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
@@ -663,7 +687,7 @@ function SalesList({data,save,onEdit}){
       map[b.date].apps.push(b);
     });
     // Only show dates that have sales
-    return Object.entries(map).filter(([_,v])=>v.sales.length>0).sort((a, b) => b[0].localeCompare(a[0]));
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
   }, [data.sales, data.rentals, data.appBookings]);
 
   const doConvertToRental = () => {
@@ -681,27 +705,21 @@ function SalesList({data,save,onEdit}){
     <h3 style={{margin:"0 0 12px",fontSize:16,fontWeight:600}}>Продажи</h3>
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту продажу?" onConfirm={()=>{const ns=restoreStockFromSale(data,confirmIdx);save({...data,sales:data.sales.filter((_,j)=>j!==confirmIdx),stock:ns});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
     {toRentalIdx!==null&&<ConfirmModal msg="Перевести эту продажу в аренду?" confirmText="Перевести" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={doConvertToRental} onClose={()=>setToRentalIdx(null)}/>}
-    {!data.sales.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет продаж</div> :
+    {!grouped.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>Пока нет записей</div> :
     grouped.map(([date, group]) => {
       const d = new Date(date);
       const dayLabel = d.getDate() + " " + MR[d.getMonth()];
-      const salesProfit = group.sales.reduce((a, s) => {
-        if (date < CUTOFF) return a + s.amount;
-        if (!s.items) return a + s.amount;
-        return a + s.items.reduce((b, it) => b + (isAppItem(it) ? 0 : it.price), 0);
-      }, 0);
-      const salesAppProfit = date < CUTOFF ? 0 : group.sales.reduce((a, s) => {
-        if (!s.items) return a;
-        return a + s.items.reduce((b, it) => b + (isAppItem(it) ? appProfit(it) : 0), 0);
-      }, 0);
-      const rentalsTotal = group.rentals.reduce((a, r) => a + Math.max(0, (r.amount||0) - (r.debt||0)), 0);
-      const appsTotal = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0) + salesAppProfit;
-      const dayGrand = salesProfit + rentalsTotal + appsTotal;
+      let totalSalesOnly = 0, totalAppsFromSales = 0;
+      group.sales.forEach(s => { const sp = saleSplit(s); totalSalesOnly += sp.sales; totalAppsFromSales += sp.apps; });
+      const totalRentals = group.rentals.reduce((a, r) => a + rentalPaid(r), 0);
+      const totalAppsFromBookings = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0);
+      const totalApps = totalAppsFromSales + totalAppsFromBookings;
+      const dayGrand = totalSalesOnly + totalRentals + totalApps;
       return (
         <div key={date} style={{marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8,padding:"0 4px"}}>
             <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{dayLabel}</span>
-            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(salesProfit)}</span>
+            {totalSalesOnly > 0 && <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(totalSalesOnly)}</span>}
           </div>
           {group.sales.map((s, i) => {
             const label = s.items ? s.items.map(it => it.name).join(", ") : (s.productName || "Продажа");
@@ -728,10 +746,10 @@ function SalesList({data,save,onEdit}){
             <div style={{fontSize:13,fontWeight:700,color:"#888"}}>ИТОГ:</div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:16,fontWeight:700,color:"#fff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayGrand)}</div>
-              {(rentalsTotal > 0 || appsTotal > 0) && <div style={{fontSize:10,color:"#666",marginTop:2}}>
-                {salesProfit > 0 && <span>Продажи {fmtM(salesProfit)}</span>}
-                {rentalsTotal > 0 && <span>{salesProfit > 0 ? " + " : ""}Аренда {fmtM(rentalsTotal)}</span>}
-                {appsTotal > 0 && <span>{(salesProfit > 0 || rentalsTotal > 0) ? " + " : ""}Прилож. {fmtM(appsTotal)}</span>}
+              {(totalRentals > 0 || totalApps > 0) && <div style={{fontSize:10,color:"#666",marginTop:2}}>
+                {totalSalesOnly > 0 && <span>{"Продажи "+fmtM(totalSalesOnly)}</span>}
+                {totalRentals > 0 && <span>{(totalSalesOnly > 0 ? " + " : "")+"Аренда "+fmtM(totalRentals)}</span>}
+                {totalApps > 0 && <span>{(totalSalesOnly > 0 || totalRentals > 0 ? " + " : "")+"Прилож. "+fmtM(totalApps)}</span>}
               </div>}
             </div>
           </div>
@@ -850,8 +868,8 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
   const year=2026,days=dim(year,selMonth);const fd=new Date(year,selMonth,1).getDay();const offset=fd===0?6:fd-1;const today=fmtD(new Date());
   const dt=useMemo(()=>{
     const m={};
-    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};if(s.date<CUTOFF){m[s.date].s+=s.amount}else{const pr=s.items?s.items.reduce((a,it)=>a+(isAppItem(it)?appProfit(it):it.price),0):s.amount;m[s.date].s+=pr}});
-    data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;m[r.date].r+=Math.max(0,(r.amount||0)-(r.debt||0))});
+    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};m[s.date].s+=saleRevenue(s)});
+    data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;m[r.date].r+=rentalPaid(r)});
     (data.appointments||[]).forEach(ap=>{if(!m[ap.date])m[ap.date]={s:0,r:0,b:0,a:0};m[ap.date].a++});
     return m;
   },[data]);
