@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>mikro_15 CRM</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%2300ff87'/><text x='50' y='68' text-anchor='middle' font-size='40' font-weight='bold' fill='black'>M15</text></svg>"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#0a0a0f"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; overflow-x: hidden; }
+    input, select, button { font-family: inherit; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyBJTaW-hxMivj4lSSi2ktpXgziWRCdLFTo",
+      authDomain: "mikro15-crm.firebaseapp.com",
+      databaseURL: "https://mikro15-crm-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "mikro15-crm",
+      storageBucket: "mikro15-crm.firebasestorage.app",
+      messagingSenderId: "745551471136",
+      appId: "1:745551471136:web:adc1623536ca89f4d35245"
+    });
+    const db = firebase.database();
+    window.storage = {
+      async get(key) {
+        try {
+          const snap = await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).once("value");
+          const val = snap.val();
+          if (val !== null) return { key, value: val };
+          const local = localStorage.getItem("m15_" + key);
+          if (local !== null) {
+            await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).set(local);
+            localStorage.removeItem("m15_" + key);
+            return { key, value: local };
+          }
+          return null;
+        } catch(e) {
+          const v = localStorage.getItem("m15_" + key);
+          return v !== null ? { key, value: v } : null;
+        }
+      },
+      async set(key, value) {
+        try {
+          await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).set(value);
+          localStorage.setItem("m15_" + key, value);
+          return { key, value };
+        } catch(e) {
+          localStorage.setItem("m15_" + key, value);
+          return { key, value };
+        }
+      },
+      async delete(key) {
+        try {
+          await db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).remove();
+          localStorage.removeItem("m15_" + key);
+          return { key, deleted: true };
+        } catch(e) {
+          localStorage.removeItem("m15_" + key);
+          return { key, deleted: true };
+        }
+      },
+      async list(prefix) { return { keys: [] }; },
+      onValue(key, callback) {
+        db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).on("value", (snap) => {
+          const val = snap.val();
+          if (val !== null) callback(val);
+        });
+      },
+      offValue(key) {
+        db.ref("crm/" + key.replace(/[.#$/\[\]]/g, "_")).off("value");
+      }
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <script type="text/babel" src="app.jsx"></script>
+  <script type="text/babel">
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
