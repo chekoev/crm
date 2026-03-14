@@ -22,6 +22,8 @@ const RENTAL_PRODUCTS = [
 const YEAR_PLAN = 7000000;
 const CUTOFF = "2026-03-14";
 const PREV_YEARS = { 2025: 5776400, 2024: 4630750, 2023: 3730250 };
+function isAppItem(it) { return it.id === "iphone_app" || (it.name && it.name.toLowerCase().indexOf("iphone") >= 0); }
+function appProfit(it) { return Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000))); }
 const MR = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const pad = n => String(n).padStart(2,"0");
@@ -358,13 +360,14 @@ function Dashboard({stats,data,maxMo}){
     let earphones = 0, rentals = 0, apps = 0, buttons = 0;
     const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
     const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
+    function isBtn(it) { return btnIds.has(it.id) || (it.name && it.name.toLowerCase().indexOf("кнопк") >= 0); }
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
       if (s.date < CUTOFF) { earphones += s.amount; return; }
       if (s.items) s.items.forEach(it => {
         if (isAppItem(it)) apps += appProfit(it);
-        else if (earIds.has(it.id)) earphones += it.price;
-        else if (btnIds.has(it.id)) buttons += it.price;
+        else if (isBtn(it)) buttons += it.price;
+        else earphones += it.price;
       }); else earphones += s.amount;
     });
     data.rentals.filter(r => new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += Math.max(0, (r.amount || 0) - (r.debt || 0)); });
@@ -593,8 +596,6 @@ function ItemsList({items,onRemove,total,editable,onPriceChange}){
   </div>);
 }
 
-function isAppItem(it) { return it.id === "iphone_app" || (it.name && it.name.toLowerCase().includes("iphone")); }
-function appProfit(it) { return Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000))); }
 function waLink(phone) {  const digits = (phone || "").replace(/\D/g, "");
   return `https://wa.me/${digits}`;
 }
