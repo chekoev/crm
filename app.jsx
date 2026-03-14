@@ -23,7 +23,8 @@ const YEAR_PLAN = 7000000;
 const CUTOFF = "2026-03-14";
 const PREV_YEARS = { 2025: 5776400, 2024: 4630750, 2023: 3730250 };
 function isAppItem(it) { return it.id === "iphone_app" || (it.name && it.name.toLowerCase().indexOf("iphone") >= 0); }
-function appProfit(it) { return Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000))); }
+function appCost(price) { return price >= 15000 ? 10000 : 8000; }
+function appProfit(it) { return Math.max(0, it.price - appCost(it.price)); }
 const MR = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const pad = n => String(n).padStart(2,"0");
@@ -173,6 +174,7 @@ function LoginScreen({ onLogin }) {
           >Войти</button>
         </div>
       </div>
+      <div style={{ position: "fixed", bottom: 16, left: 0, right: 0, textAlign: "center", fontSize: 11, color: "#333" }}>mikro_15 CRM v12</div>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}`}</style>
     </div>
   );
@@ -459,7 +461,7 @@ function SaleForm({products,stock,selDate,onClose,onSave}){
     const p=products.find(x=>x.id===cp);if(!p)return;
     const pr=cpr?Number(cpr):p.price;
     const item={id:p.id,name:p.name,price:pr};
-    if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}
+    if(p.id==="iphone_app"){item.cost=appCost(pr)}
     setItems([...items,item]);setCp("");setCpr("");
   };
   const total=items.reduce((a,it)=>a+it.price,0);
@@ -492,7 +494,7 @@ function SaleForm({products,stock,selDate,onClose,onSave}){
           add();
         }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:10,color:"#00ff87",padding:"0 20px",fontSize:18,cursor:"pointer",fontWeight:700}}>+</button>
       </div>
-      {selProduct&&selProduct.id==="iphone_app"&&<div style={{fontSize:12,color:"#888"}}>Себестоимость авто: {fmtM((cpr?Number(cpr):selProduct.price)>=15000?10000:8000)} · Прибыль: {fmtM((cpr?Number(cpr):selProduct.price)-((cpr?Number(cpr):selProduct.price)>=15000?10000:8000))}</div>}
+      {selProduct&&selProduct.id==="iphone_app"&&<div style={{fontSize:12,color:"#888"}}>Себестоимость: {fmtM(appCost(cpr?Number(cpr):selProduct.price))} · Прибыль: {fmtM((cpr?Number(cpr):selProduct.price) - appCost(cpr?Number(cpr):selProduct.price))}</div>}
     </div>}
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e=>setName(e.target.value)} style={inp}/>
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp}/>
@@ -507,7 +509,7 @@ function EditSaleModal({idx,data,save,onClose}){
   const [phone,setPhone]=useState(sale.phone||"");const [name,setName]=useState(sale.name||"");const [date,setDate]=useState(sale.date);
   const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");
   const products=data.products;
-  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;const pr=cpr?Number(cpr):p.price;const item={id:p.id,name:p.name,price:pr};if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}setItems([...items,item]);setCp("");setCpr("")};
+  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;const pr=cpr?Number(cpr):p.price;const item={id:p.id,name:p.name,price:pr};if(p.id==="iphone_app"){item.cost=appCost(pr)}setItems([...items,item]);setCp("");setCpr("")};
   const total=items.reduce((a,it)=>a+it.price,0);
   const [confirmDel,setConfirmDel]=useState(false);
 
