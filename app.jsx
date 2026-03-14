@@ -347,7 +347,7 @@ function ConfirmModal({msg,onConfirm,onClose,confirmText,confirmColor}){
 function Dashboard({stats,data,maxMo}){
   // Category breakdown — apps counted as PROFIT (amount - cost)
   const cats = useMemo(() => {
-    let earphones = 0, rentals = 0, apps = 0, buttons = 0, accessories = 0;
+    let earphones = 0, rentals = 0, apps = 0, buttons = 0;
     const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
     const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
     data.sales.forEach(s => {
@@ -356,16 +356,15 @@ function Dashboard({stats,data,maxMo}){
         if (it.id === "iphone_app") apps += Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000)));
         else if (earIds.has(it.id)) earphones += it.price;
         else if (btnIds.has(it.id)) buttons += it.price;
-        else accessories += it.price;
       }); else earphones += s.amount;
     });
     data.rentals.filter(r => (r.status === "active" || r.status === "done") && new Date(r.date).getFullYear() === 2026).forEach(r => { rentals += (r.amount || 0); });
     (data.appBookings || []).filter(b => (b.status === "done" || b.status === "installed") && new Date(b.date).getFullYear() === 2026).forEach(b => {
       apps += Math.max(0, (b.amount || 0) - (b.cost || APP_COST * (b.qty || 1)));
     });
-    const total = earphones + rentals + apps + buttons + accessories;
+    const total = earphones + rentals + apps + buttons;
     const pct = v => total > 0 ? ((v / total) * 100).toFixed(1) : "0.0";
-    return { earphones, rentals, apps, buttons, accessories, total, pct };
+    return { earphones, rentals, apps, buttons, total, pct };
   }, [data]);
 
   return (<div>
@@ -397,7 +396,6 @@ function Dashboard({stats,data,maxMo}){
         {l:"Аренда",v:cats.rentals,c:"#00aaff"},
         {l:"Приложения (прибыль)",v:cats.apps,c:"#ff6bff"},
         {l:"Кнопки",v:cats.buttons,c:"#ffaa00"},
-        {l:"Аксессуары",v:cats.accessories,c:"#cc88ff"},
       ].map((c,i) => (
         <div key={i} style={{marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
@@ -443,28 +441,25 @@ function Dashboard({stats,data,maxMo}){
 
 // ====== SALE FORM (new) ======
 function SaleForm({products,stock,selDate,onClose,onSave}){
-  const [items,setItems]=useState([]);const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");const [ccost,setCcost]=useState("");
+  const [items,setItems]=useState([]);const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");
   const [phone,setPhone]=useState("");const [name,setName]=useState("");const [date,setDate]=useState(selDate);
-  const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
   const add=()=>{
     const p=products.find(x=>x.id===cp);if(!p)return;
     const pr=cpr?Number(cpr):p.price;
     const item={id:p.id,name:p.name,price:pr};
     if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}
-    else if(!earIds.has(p.id)&&ccost){item.cost=Number(ccost)}
-    setItems([...items,item]);setCp("");setCpr("");setCcost("");
+    setItems([...items,item]);setCp("");setCpr("");
   };
   const total=items.reduce((a,it)=>a+it.price,0);
   const cartCount = {};
   items.forEach(it => { if (it.id) cartCount[it.id] = (cartCount[it.id]||0) + 1; });
   const selProduct = products.find(x=>x.id===cp);
-  const showCost = selProduct && !earIds.has(selProduct.id) && selProduct.id !== "iphone_app";
 
   return (<Modal onClose={onClose} title="💰 Новая продажа"><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={inp}/>
     {items.length>0&&<ItemsList items={items} onRemove={i=>setItems(items.filter((_,j)=>j!==i))} total={total}/>}
     <label style={lbl}>Добавить товар</label>
-    <select value={cp} onChange={e=>{setCp(e.target.value);const p=products.find(x=>x.id===e.target.value);if(p)setCpr(String(p.price));setCcost("")}} style={inp}>
+    <select value={cp} onChange={e=>{setCp(e.target.value);const p=products.find(x=>x.id===e.target.value);if(p)setCpr(String(p.price))}} style={inp}>
       <option value="">Выберите...</option>
       {products.map(p => {
         const qty = stock[p.id] || 0;
@@ -485,8 +480,7 @@ function SaleForm({products,stock,selDate,onClose,onSave}){
           add();
         }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:10,color:"#00ff87",padding:"0 20px",fontSize:18,cursor:"pointer",fontWeight:700}}>+</button>
       </div>
-      {showCost&&<input type="number" placeholder="Себестоимость (необязательно)" value={ccost} onChange={e=>setCcost(e.target.value)} style={inp}/>}
-      {selProduct&&selProduct.id==="iphone_app"&&<div style={{fontSize:12,color:"#888"}}>Себестоимость авто: {fmtM((cpr?Number(cpr):selProduct.price)>=15000?10000:8000)}</div>}
+      {selProduct&&selProduct.id==="iphone_app"&&<div style={{fontSize:12,color:"#888"}}>Себестоимость авто: {fmtM((cpr?Number(cpr):selProduct.price)>=15000?10000:8000)} · Прибыль: {fmtM((cpr?Number(cpr):selProduct.price)-((cpr?Number(cpr):selProduct.price)>=15000?10000:8000))}</div>}
     </div>}
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e=>setName(e.target.value)} style={inp}/>
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp}/>
