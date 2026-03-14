@@ -20,6 +20,7 @@ const RENTAL_PRODUCTS = [
 ];
 
 const YEAR_PLAN = 7000000;
+const CUTOFF = "2026-03-14";
 const PREV_YEARS = { 2025: 5776400, 2024: 4630750, 2023: 3730250 };
 const MR = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const MS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
@@ -226,12 +227,14 @@ function MainApp({ onLogout }){
     setTimeout(() => { savingRef.current = false; }, 1000);
   }, []);
 
+
   const stats=useMemo(()=>{
     const mo=Array(12).fill(0).map(()=>({s:0,r:0,t:0,sc:0,rc:0}));let yt=0;
     data.sales.forEach(s=>{
       const d=new Date(s.date);if(d.getFullYear()!==2026)return;
-      let profit=0;
-      if(s.items){s.items.forEach(it=>{profit+=it.cost?Math.max(0,it.price-it.cost):it.price})}else{profit=s.amount}
+      let profit;
+      if(s.date < CUTOFF){profit=s.amount}
+      else{profit=s.items?s.items.reduce((a,it)=>a+(it.cost?Math.max(0,it.price-it.cost):it.price),0):s.amount}
       mo[d.getMonth()].s+=profit;mo[d.getMonth()].t+=profit;mo[d.getMonth()].sc++;yt+=profit;
     });
     data.rentals.forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){const paid=Math.max(0,(r.amount||0)-(r.debt||0));mo[d.getMonth()].r+=paid;mo[d.getMonth()].t+=paid;mo[d.getMonth()].rc++;yt+=paid}});
@@ -242,7 +245,7 @@ function MainApp({ onLogout }){
     if(!detailDay)return null;
     const ds=data.sales.filter(s=>s.date===detailDay),dr=data.rentals.filter(r=>r.date===detailDay);
     const da=(data.appointments||[]).filter(a=>a.date===detailDay);
-    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>{if(!s.items)return a+s.amount;return a+s.items.reduce((b,it)=>b+(it.cost?Math.max(0,it.price-it.cost):it.price),0)},0),totalRentals:dr.reduce((a,r)=>a+Math.max(0,(r.amount||0)-(r.debt||0)),0)};
+    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>{if(s.date<CUTOFF)return a+s.amount;if(!s.items)return a+s.amount;return a+s.items.reduce((b,it)=>b+(it.cost?Math.max(0,it.price-it.cost):it.price),0)},0),totalRentals:dr.reduce((a,r)=>a+Math.max(0,(r.amount||0)-(r.debt||0)),0)};
   },[data,detailDay]);
 
   const clients=useMemo(()=>{
@@ -357,6 +360,7 @@ function Dashboard({stats,data,maxMo}){
     const btnIds = new Set(["knopki_std","knopki_yant","knopki_mini"]);
     data.sales.forEach(s => {
       if (new Date(s.date).getFullYear() !== 2026) return;
+      if (s.date < CUTOFF) { earphones += s.amount; return; }
       if (s.items) s.items.forEach(it => {
         if (it.id === "iphone_app") apps += Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000)));
         else if (earIds.has(it.id)) earphones += it.price;
@@ -678,11 +682,16 @@ function SalesList({data,save,onEdit}){
       const d = new Date(date);
       const dayLabel = d.getDate() + " " + MR[d.getMonth()];
       const salesProfit = group.sales.reduce((a, s) => {
+        if (date < CUTOFF) return a + s.amount;
         if (!s.items) return a + s.amount;
-        return a + s.items.reduce((b, it) => b + (it.cost ? Math.max(0, it.price - it.cost) : it.price), 0);
+        return a + s.items.reduce((b, it) => b + (it.id === "iphone_app" ? 0 : it.price), 0);
+      }, 0);
+      const salesAppProfit = date < CUTOFF ? 0 : group.sales.reduce((a, s) => {
+        if (!s.items) return a;
+        return a + s.items.reduce((b, it) => b + (it.id === "iphone_app" ? Math.max(0, it.price - (it.cost || (it.price >= 15000 ? 10000 : 8000))) : 0), 0);
       }, 0);
       const rentalsTotal = group.rentals.reduce((a, r) => a + Math.max(0, (r.amount||0) - (r.debt||0)), 0);
-      const appsTotal = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0);
+      const appsTotal = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0) + salesAppProfit;
       const dayGrand = salesProfit + rentalsTotal + appsTotal;
       return (
         <div key={date} style={{marginBottom:16}}>
@@ -837,7 +846,7 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
   const year=2026,days=dim(year,selMonth);const fd=new Date(year,selMonth,1).getDay();const offset=fd===0?6:fd-1;const today=fmtD(new Date());
   const dt=useMemo(()=>{
     const m={};
-    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};const pr=s.items?s.items.reduce((a,it)=>a+(it.cost?Math.max(0,it.price-it.cost):it.price),0):s.amount;m[s.date].s+=pr});
+    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};if(s.date<CUTOFF){m[s.date].s+=s.amount}else{const pr=s.items?s.items.reduce((a,it)=>a+(it.cost?Math.max(0,it.price-it.cost):it.price),0):s.amount;m[s.date].s+=pr}});
     data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;m[r.date].r+=Math.max(0,(r.amount||0)-(r.debt||0))});
     (data.appointments||[]).forEach(ap=>{if(!m[ap.date])m[ap.date]={s:0,r:0,b:0,a:0};m[ap.date].a++});
     return m;
