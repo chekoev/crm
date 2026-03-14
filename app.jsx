@@ -443,38 +443,50 @@ function Dashboard({stats,data,maxMo}){
 
 // ====== SALE FORM (new) ======
 function SaleForm({products,stock,selDate,onClose,onSave}){
-  const [items,setItems]=useState([]);const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");
+  const [items,setItems]=useState([]);const [cp,setCp]=useState("");const [cpr,setCpr]=useState("");const [ccost,setCcost]=useState("");
   const [phone,setPhone]=useState("");const [name,setName]=useState("");const [date,setDate]=useState(selDate);
-  const add=()=>{const p=products.find(x=>x.id===cp);if(!p)return;const pr=cpr?Number(cpr):p.price;const item={id:p.id,name:p.name,price:pr};if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}setItems([...items,item]);setCp("");setCpr("")};
+  const earIds = new Set(["plat","silver","plat_mini","silver_mini","flash","flash_mini","flash_77","nano_7","flash_2026","flash_mag_2026"]);
+  const add=()=>{
+    const p=products.find(x=>x.id===cp);if(!p)return;
+    const pr=cpr?Number(cpr):p.price;
+    const item={id:p.id,name:p.name,price:pr};
+    if(p.id==="iphone_app"){item.cost=pr>=15000?10000:8000}
+    else if(!earIds.has(p.id)&&ccost){item.cost=Number(ccost)}
+    setItems([...items,item]);setCp("");setCpr("");setCcost("");
+  };
   const total=items.reduce((a,it)=>a+it.price,0);
-  const totalProfit=items.reduce((a,it)=>a+(it.cost?it.price-it.cost:it.price),0);
-  // Count how many of each product already in cart
   const cartCount = {};
   items.forEach(it => { if (it.id) cartCount[it.id] = (cartCount[it.id]||0) + 1; });
+  const selProduct = products.find(x=>x.id===cp);
+  const showCost = selProduct && !earIds.has(selProduct.id) && selProduct.id !== "iphone_app";
 
   return (<Modal onClose={onClose} title="💰 Новая продажа"><div style={{display:"flex",flexDirection:"column",gap:12}}>
     <label style={lbl}>Дата</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={inp}/>
     {items.length>0&&<ItemsList items={items} onRemove={i=>setItems(items.filter((_,j)=>j!==i))} total={total}/>}
     <label style={lbl}>Добавить товар</label>
-    <select value={cp} onChange={e=>{setCp(e.target.value);const p=products.find(x=>x.id===e.target.value);if(p)setCpr(String(p.price))}} style={inp}>
+    <select value={cp} onChange={e=>{setCp(e.target.value);const p=products.find(x=>x.id===e.target.value);if(p)setCpr(String(p.price));setCcost("")}} style={inp}>
       <option value="">Выберите...</option>
       {products.map(p => {
         const qty = stock[p.id] || 0;
         const inCart = cartCount[p.id] || 0;
         const avail = qty - inCart;
-        return <option key={p.id} value={p.id}>{p.name} — {fmtM(p.price)} {qty > 0 ? `[${avail} шт]` : "[нет]"}</option>;
+        return <option key={p.id} value={p.id}>{p.name} — {fmtM(p.price)} {qty > 0 ? "[" + avail + " шт]" : "[нет]"}</option>;
       })}
     </select>
-    {cp&&<div style={{display:"flex",gap:8}}>
-      <input type="number" placeholder="Сумма" value={cpr} onChange={e=>setCpr(e.target.value)} style={{...inp,flex:1}}/>
-      <button onClick={()=>{
-        const p=products.find(x=>x.id===cp);
-        if(!p)return;
-        const qty=stock[p.id]||0;
-        const inCart=cartCount[p.id]||0;
-        if(qty>0 && inCart>=qty){alert("На складе не хватает: "+p.name);return;}
-        add();
-      }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:10,color:"#00ff87",padding:"0 20px",fontSize:18,cursor:"pointer",fontWeight:700}}>+</button>
+    {cp&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",gap:8}}>
+        <input type="number" placeholder="Сумма" value={cpr} onChange={e=>setCpr(e.target.value)} style={{...inp,flex:1}}/>
+        <button onClick={()=>{
+          const p=products.find(x=>x.id===cp);
+          if(!p)return;
+          const qty=stock[p.id]||0;
+          const inCart=cartCount[p.id]||0;
+          if(qty>0 && inCart>=qty){alert("На складе не хватает: "+p.name);return;}
+          add();
+        }} style={{background:"#00ff8722",border:"1px solid #00ff8744",borderRadius:10,color:"#00ff87",padding:"0 20px",fontSize:18,cursor:"pointer",fontWeight:700}}>+</button>
+      </div>
+      {showCost&&<input type="number" placeholder="Себестоимость (необязательно)" value={ccost} onChange={e=>setCcost(e.target.value)} style={inp}/>}
+      {selProduct&&selProduct.id==="iphone_app"&&<div style={{fontSize:12,color:"#888"}}>Себестоимость авто: {fmtM((cpr?Number(cpr):selProduct.price)>=15000?10000:8000)}</div>}
     </div>}
     <label style={lbl}>Имя / Фамилия</label><input value={name} onChange={e=>setName(e.target.value)} style={inp}/>
     <label style={lbl}>Телефон</label><PhoneInput value={phone} onChange={setPhone} style={inp}/>
@@ -593,7 +605,8 @@ function rentalStatus(r) {
   const tom = tomorrow(today);
   if (r.status === "done") return null;
   if (r.status !== "active") return null;
-  if (ret === tom || ret > today) return {text: "Аренда до " + ret, color: "#00aaff"};
+  if (ret > tom) return {text: "Аренда до " + ret, color: "#00aaff"};
+  if (ret === tom) return {text: "Аренда до завтра", color: "#00aaff"};
   if (ret === today) return {text: "Сегодня вернут", color: "#ffaa00"};
   return {text: "Просрочка аренды!", color: "#ff4444"};
 }
