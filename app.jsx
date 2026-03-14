@@ -228,7 +228,12 @@ function MainApp({ onLogout }){
 
   const stats=useMemo(()=>{
     const mo=Array(12).fill(0).map(()=>({s:0,r:0,t:0,sc:0,rc:0}));let yt=0;
-    data.sales.forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===2026){mo[d.getMonth()].s+=s.amount;mo[d.getMonth()].t+=s.amount;mo[d.getMonth()].sc++;yt+=s.amount}});
+    data.sales.forEach(s=>{
+      const d=new Date(s.date);if(d.getFullYear()!==2026)return;
+      let profit=0;
+      if(s.items){s.items.forEach(it=>{profit+=it.cost?Math.max(0,it.price-it.cost):it.price})}else{profit=s.amount}
+      mo[d.getMonth()].s+=profit;mo[d.getMonth()].t+=profit;mo[d.getMonth()].sc++;yt+=profit;
+    });
     data.rentals.forEach(r=>{const d=new Date(r.date);if(d.getFullYear()===2026){const paid=Math.max(0,(r.amount||0)-(r.debt||0));mo[d.getMonth()].r+=paid;mo[d.getMonth()].t+=paid;mo[d.getMonth()].rc++;yt+=paid}});
     return {monthly:mo,yearTotal:yt,remaining:YEAR_PLAN-yt,progress:(yt/YEAR_PLAN)*100};
   },[data]);
@@ -237,7 +242,7 @@ function MainApp({ onLogout }){
     if(!detailDay)return null;
     const ds=data.sales.filter(s=>s.date===detailDay),dr=data.rentals.filter(r=>r.date===detailDay);
     const da=(data.appointments||[]).filter(a=>a.date===detailDay);
-    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>a+s.amount,0),totalRentals:dr.filter(r=>r.status!=="booking").reduce((a,r)=>a+(r.amount||0),0)};
+    return {sales:ds,rentals:dr,appointments:da,totalSales:ds.reduce((a,s)=>{if(!s.items)return a+s.amount;return a+s.items.reduce((b,it)=>b+(it.cost?Math.max(0,it.price-it.cost):it.price),0)},0),totalRentals:dr.reduce((a,r)=>a+Math.max(0,(r.amount||0)-(r.debt||0)),0)};
   },[data,detailDay]);
 
   const clients=useMemo(()=>{
@@ -672,15 +677,18 @@ function SalesList({data,save,onEdit}){
     grouped.map(([date, group]) => {
       const d = new Date(date);
       const dayLabel = d.getDate() + " " + MR[d.getMonth()];
-      const salesTotal = group.sales.reduce((a, s) => a + s.amount, 0);
+      const salesProfit = group.sales.reduce((a, s) => {
+        if (!s.items) return a + s.amount;
+        return a + s.items.reduce((b, it) => b + (it.cost ? Math.max(0, it.price - it.cost) : it.price), 0);
+      }, 0);
       const rentalsTotal = group.rentals.reduce((a, r) => a + Math.max(0, (r.amount||0) - (r.debt||0)), 0);
       const appsTotal = group.apps.reduce((a, b) => a + Math.max(0, (b.amount||0) - (b.cost || APP_COST * (b.qty||1))), 0);
-      const dayGrand = salesTotal + rentalsTotal + appsTotal;
+      const dayGrand = salesProfit + rentalsTotal + appsTotal;
       return (
         <div key={date} style={{marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8,padding:"0 4px"}}>
             <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{dayLabel}</span>
-            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(salesTotal)}</span>
+            <span style={{fontSize:13,color:"#00ff87",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(salesProfit)}</span>
           </div>
           {group.sales.map((s, i) => {
             const label = s.items ? s.items.map(it => it.name).join(", ") : (s.productName || "Продажа");
@@ -708,9 +716,9 @@ function SalesList({data,save,onEdit}){
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:16,fontWeight:700,color:"#fff",fontFamily:"'JetBrains Mono',monospace"}}>{fmtM(dayGrand)}</div>
               {(rentalsTotal > 0 || appsTotal > 0) && <div style={{fontSize:10,color:"#666",marginTop:2}}>
-                {salesTotal > 0 && <span>Продажи {fmtM(salesTotal)}</span>}
-                {rentalsTotal > 0 && <span>{salesTotal > 0 ? " + " : ""}Аренда {fmtM(rentalsTotal)}</span>}
-                {appsTotal > 0 && <span>{(salesTotal > 0 || rentalsTotal > 0) ? " + " : ""}Прилож. {fmtM(appsTotal)}</span>}
+                {salesProfit > 0 && <span>Продажи {fmtM(salesProfit)}</span>}
+                {rentalsTotal > 0 && <span>{salesProfit > 0 ? " + " : ""}Аренда {fmtM(rentalsTotal)}</span>}
+                {appsTotal > 0 && <span>{(salesProfit > 0 || rentalsTotal > 0) ? " + " : ""}Прилож. {fmtM(appsTotal)}</span>}
               </div>}
             </div>
           </div>
@@ -829,8 +837,8 @@ function CalendarView({data,selMonth,setSelMonth,onDayClick,onBook}){
   const year=2026,days=dim(year,selMonth);const fd=new Date(year,selMonth,1).getDay();const offset=fd===0?6:fd-1;const today=fmtD(new Date());
   const dt=useMemo(()=>{
     const m={};
-    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};m[s.date].s+=s.amount});
-    data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;else m[r.date].r+=(r.amount||0)});
+    data.sales.forEach(s=>{if(!m[s.date])m[s.date]={s:0,r:0,b:0,a:0};const pr=s.items?s.items.reduce((a,it)=>a+(it.cost?Math.max(0,it.price-it.cost):it.price),0):s.amount;m[s.date].s+=pr});
+    data.rentals.forEach(r=>{if(!m[r.date])m[r.date]={s:0,r:0,b:0,a:0};if(r.status==="booking")m[r.date].b++;m[r.date].r+=Math.max(0,(r.amount||0)-(r.debt||0))});
     (data.appointments||[]).forEach(ap=>{if(!m[ap.date])m[ap.date]={s:0,r:0,b:0,a:0};m[ap.date].a++});
     return m;
   },[data]);
