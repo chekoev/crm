@@ -102,7 +102,7 @@ function formatPhone(raw) {
   let d = raw.replace(/\D/g,"");
   if (d.startsWith("8")&&d.length>1) d="7"+d.slice(1);
   if (d.startsWith("7")) d=d.slice(1);
-  if (!d.length) return "+7";
+  if (!d.length) return "";
   let o="+7("+d.slice(0,3);
   if (d.length>=3) o+=")";
   if (d.length>3) o+=d.slice(3,6);
@@ -111,7 +111,7 @@ function formatPhone(raw) {
   return o;
 }
 function PhoneInput({value,onChange,style:s}){
-  return <input type="tel" value={value} onFocus={()=>{if(!value)onChange("+7")}} onChange={e=>onChange(formatPhone(e.target.value))} placeholder="+7(___)___-__-__" style={s}/>;
+  return <input type="tel" value={value} onChange={e=>onChange(formatPhone(e.target.value))} placeholder="+7(___)___-__-__" style={s}/>;
 }
 
 const SEED=[
@@ -811,7 +811,7 @@ function RentalsList({data,save,onEdit}){
     } else {
       list = data.rentals.map((r,i)=>({...r,_idx:i})).filter(r=>r.status!=="booking");
     }
-    if (search && search !== "+7") {
+    if (search) {
       const q = formatPhone(search); const ql = search.toLowerCase();
       list = list.filter(r => (r.phone || "").includes(q) || (r.phone || "").includes(search) || (r.lastName || "").toLowerCase().includes(ql));
     }
@@ -836,7 +836,7 @@ function RentalsList({data,save,onEdit}){
     <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx!==null&&<ConfirmModal msg="Удалить эту запись?" onConfirm={()=>{save({...data,rentals:data.rentals.filter((_,j)=>j!==confirmIdx)});setConfirmIdx(null)}} onClose={()=>setConfirmIdx(null)}/>}
     {statusChange!==null&&<ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={()=>{const nr=[...data.rentals];nr[statusChange.idx]={...nr[statusChange.idx],status:statusChange.newStatus};save({...data,rentals:nr});setStatusChange(null)}} onClose={()=>setStatusChange(null)}/>}
-    {!grouped.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search&&search!=="+7"?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
+    {!grouped.length?<div style={{color:"#555",padding:40,textAlign:"center"}}>{search?"Ничего не найдено":tab==="bookings"?"Нет будущих броней":"Пока нет аренд"}</div>:
     grouped.map(([date, rentals]) => {
       const d = new Date(date);
       const dayLabel = `${d.getDate()} ${MR[d.getMonth()]}`;
@@ -1066,7 +1066,7 @@ function AppBookingsView({data, save, openModal}) {
 
   const filtered = useMemo(() => {
     const list = bookings.map((b, i) => ({...b, _idx: i}));
-    if (!search || search === "+7") return list.reverse();
+    if (!search) return list.reverse();
     const q = formatPhone(search);
     const ql = search.toLowerCase();
     return list.filter(b => (b.phone || "").includes(q) || (b.phone || "").includes(search) || (b.name || "").toLowerCase().includes(ql)).reverse();
@@ -1085,7 +1085,7 @@ function AppBookingsView({data, save, openModal}) {
     <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx !== null && <ConfirmModal msg="Удалить бронь приложения?" onConfirm={() => { const nb = [...bookings]; nb.splice(confirmIdx, 1); save({...data, appBookings: nb}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
     {statusChange !== null && <ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={() => { const nb = [...bookings]; nb[statusChange.idx] = {...nb[statusChange.idx], status: statusChange.newStatus}; save({...data, appBookings: nb}); setStatusChange(null); }} onClose={() => setStatusChange(null)} />}
-    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search && search !== "+7" ? "Ничего не найдено" : "Пока нет броней приложений"}</div> :
+    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search ? "Ничего не найдено" : "Пока нет броней приложений"}</div> :
     filtered.map((b, i) => {
       const isInstalled = b.status === "installed" || b.status === "done";
       const nextStatus = isInstalled ? "pending" : "installed";
@@ -1178,7 +1178,7 @@ function AppointmentsView({data, save, openModal}) {
 
   const filtered = useMemo(() => {
     const list = appts.map((a, i) => ({...a, _idx: i}));
-    if (!search || search === "+7") return list.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).reverse();
+    if (!search) return list.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).reverse();
     const q = formatPhone(search);
     const ql = search.toLowerCase();
     return list.filter(a => (a.phone || "").includes(q) || (a.phone || "").includes(search) || (a.name || "").toLowerCase().includes(ql)).reverse();
@@ -1197,7 +1197,7 @@ function AppointmentsView({data, save, openModal}) {
     <PhoneInput value={search} onChange={setSearch} style={{...inp, marginBottom: 12}} />
     {confirmIdx !== null && <ConfirmModal msg="Удалить запись?" onConfirm={() => { const na = [...appts]; na.splice(confirmIdx, 1); save({...data, appointments: na}); setConfirmIdx(null); }} onClose={() => setConfirmIdx(null)} />}
     {statusChange !== null && <ConfirmModal msg={`Изменить статус на «${statusChange.label}»?`} confirmText="Изменить" confirmColor="linear-gradient(135deg,#00aaff,#0088cc)" onConfirm={() => { const na = [...appts]; na[statusChange.idx] = {...na[statusChange.idx], status: statusChange.newStatus}; save({...data, appointments: na}); setStatusChange(null); }} onClose={() => setStatusChange(null)} />}
-    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search && search !== "+7" ? "Ничего не найдено" : "Пока нет записей"}</div> :
+    {!filtered.length ? <div style={{color:"#555",padding:40,textAlign:"center"}}>{search ? "Ничего не найдено" : "Пока нет записей"}</div> :
     filtered.map((a, i) => {
       const isPending = a.status === "pending" || !a.status;
       const nextSt = isPending ? "done" : a.status === "done" ? "cancelled" : "pending";
